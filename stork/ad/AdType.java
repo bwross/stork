@@ -217,11 +217,11 @@ class AdType {
     Map<String, AdMember> fm = new HashMap<String, AdMember>();
     if (publicOnly)
       fillFields(fm, clazz().getFields());
-    else for (AdType t: supers())
+    else for (AdType t : supers())
       t.fillFields(fm, t.clazz().getDeclaredFields());
-    return fm.values().toArray(new AdMember[0]);
+    return fm.values().toArray(new AdMember[fm.size()]);
   } private void fillFields(Map<String, AdMember> fm, Field[] fs) {
-    for (Field f : fs) if (!AdMember.ignore(f))
+    for (Field f : fs)
       fm.put(f.getName(), (AdMember) new AdMember(f).parent(this));
   }
 

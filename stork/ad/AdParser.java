@@ -1,6 +1,5 @@
 package stork.ad;
 
-import stork.util.Log;
 import java.io.*;
 import java.util.*;
 import java.math.*;

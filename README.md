@@ -1,16 +1,18 @@
 Introduction
 ============
 
-Stork is a data transfer scheduler that provides a common interface to
-different file transfer protocols.
+Stork is a data transfer scheduler that manages and optimizes the movement of
+data across arbitrary endpoints in a protocol-agnostic manner. Stork also
+provides interfaces for browsing and organizing data on remote endpoints, as
+well as command line and browser clients for interacting with the system.
 
-Stork uses a client—server architecture where clients submit jobs to a Stork
-server and the Stork server performs the transfer when resources permit. The
-transfer happens asynchronously to the client, allowing users to go along their
-merry way and check on the status of the job at their own leisure. The Stork
-server responds to any failures that may occur during transfer automatically,
-handling them in an appropriate way and informing the user if a job can't be
-completed.
+Stork uses client—server approach to scheduling data transfer jobs. Clients
+submit jobs to a Stork server and the Stork server performs the transfer when
+resources permit. The transfer happens asynchronously to the client, allowing
+users to go along their merry way and check on the status of the job at their
+own leisure. The Stork server responds to any failures that may occur during
+transfer automatically, handling them in an appropriate way and informing the
+user if a job can't be completed.
 
 Stork plug-ins can be created to add support for new file transfer protocols
 very easily (with any programming language, too) using a simple external

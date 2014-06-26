@@ -58,6 +58,16 @@ public class AdObject implements Comparable<AdObject> {
   private static Object makePrimitive(Object o) {
     if (o == null)
       return o;
+
+    Ad.Marshaller m = Ad.findMarshaller(new AdType(o.getClass()));
+    if (m != null) try {
+      o = m.marshal(o);
+      if (o == null)
+        return null;
+    } catch (Ad.MarshallerDeference e) {
+      // Delegate to default handler.
+    }
+
     if (o instanceof String)
       return o;
     if (o instanceof Number)

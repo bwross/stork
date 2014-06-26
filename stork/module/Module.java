@@ -7,33 +7,48 @@ import stork.scheduler.*;
 
 import java.util.*;
 
-// Abstract base class for a Stork transfer module.
+/**
+ * Abstract base class for a Stork transfer module.
+ *
+ * @param <R> The {@code Resource} type.
+ */
+public abstract class Module<R extends Resource> {
+  private String name = "Untitled", handle = "untitled";
+  private String[] protocols = new String[0];
+  private String description = "(no description)";
 
-public abstract class Module {
-  public final String name, handle;
-  public final String[] protocols;
-  protected String description = "(no description)";
-  protected String version = "N/V";
-  protected String author, email, website;
-  protected String[] options;
+  /** Get the module name. */
+  public final String name() { return name; }
 
-  public Module(Ad ad) {
-    this(ad.get("name"), ad.getAll(String[].class, "protocols"));
-  } public Module(String name, String... protocols) {
-    // Check the name.
-    if (name == null || name.isEmpty())
-      throw new RuntimeException("module has no name");
+  /** Get the module handle (i.e., short name). */
+  public final String handle() { return handle; }
+
+  /** Get the description. */
+  public final String description() { return description; }
+
+  /** Get the supported protocols. */
+  public final String[] protocols() { return protocols; }
+
+  /** Set the module name. */
+  protected final void name(String name) {
+    if (name == null) return;
+    name = name.trim();
+    if (name.isEmpty()) return;
     this.name = name;
+    this.handle = StorkUtil.normalize(name);
+  }
 
-    // Generate a handle.
-    handle = StorkUtil.normalize(name);
-    if (handle.isEmpty())
-      throw new RuntimeException("module has an invalid handle: \""+handle+'"');
+  /** Set the supported protocols. */
+  protected final void protocols(String... protocols) {
+    if (protocols.length == 0)
+      this.protocols = null;
+    else
+      this.protocols = normalizedSet(protocols);
+  }
 
-    // Check and normalize the protocols.
-    if (protocols == null || protocols.length < 1)
-      throw new RuntimeException("module does not handle any protocols");
-    this.protocols = normalizedSet(protocols);
+  /** Set the description. Arguments will be joined with space. */
+  protected final void description(String... description) {
+    this.description = StorkUtil.join((Object[]) description);
   }
 
   // Return a normalized string set. Used for protocol and option sets.
@@ -43,24 +58,12 @@ public abstract class Module {
     return new HashSet<String>(Arrays.asList(s)).toArray(new String[0]);
   }
 
-  // Convenience method for setting options.
-  protected void options(Class clazz) {
-    options = Ad.fieldsOf(clazz);
-  } protected void options(String... opts) {
-    options = normalizedSet(opts);
-  }
-
-  // Unmarshal transfer modules by name.
-  public static Module unmarshal(String s) {
-    return byHandle(s);
-  }
-
-  // Lookup a transfer module by name.
+  /** Look up a transfer module by handle. */
   public static Module byHandle(String s) {
     return ModuleTable.instance().byHandle(s);
   }
 
-  // Lookup a transfer module by protocol.
+  /** Look up a transfer module by protocol. */
   public static Module byProtocol(String s) {
     return ModuleTable.instance().byProtocol(s);
   }
@@ -73,7 +76,7 @@ public abstract class Module {
    * @throws IllegalArgumentException if the given URI does not properly
    * identify a resource or specifies a scheme not supported by this module.
    */
-  public final Resource select(String uri) {
+  public final R select(String uri) {
     return select(uri, null);
   }
 
@@ -87,7 +90,7 @@ public abstract class Module {
    * @throws IllegalArgumentException if the given URI does not properly
    * identify a resource or specifies a scheme not supported by this module.
    */
-  public final Resource select(String uri, Credential credential) {
+  public final R select(String uri, Credential credential) {
     return select(uri, credential);
   }
 
@@ -99,7 +102,7 @@ public abstract class Module {
    * @throws IllegalArgumentException if the given URI does not properly
    * identify a resource or specifies a scheme not supported by this module.
    */
-  public final Resource select(URI uri) {
+  public final R select(URI uri) {
     return select(uri, null);
   }
 
@@ -118,9 +121,7 @@ public abstract class Module {
    * @see Resource
    * @see Session
    */
-  public abstract Resource select(URI uri, Credential credential);
+  public abstract R select(URI uri, Credential credential);
 
-  public String toString() {
-    return handle;
-  }
+  public String toString() { return handle; }
 }

@@ -1,320 +1,190 @@
 package stork.feather;
 
 import java.io.*;
+import java.util.*;
+
+import stork.feather.util.*;
 
 /**
- * A session represents a connection to a remote endpoint and all associated
- * configuration and state. {@code Session}s are stateful and, once opened,
- * represent an established connection to an endpoint. Sessions should not be
- * interacted with directly, and instead should have all operations performed
- * on them through through their decorators which enforce the Session-Client
- * Contract.
+ * A {@code Session} is a stateful context for operating on {@code Resource}s.
+ * {@code Session}s serve as a nexus for all of the stateful information
+ * related to operating on a particular class of {@code Resource}s, which may
+ * include network connections, user credentials, configuration options, and
+ * other state necessary for operating on the {@code Resource}s it supports.
  * <p/>
- * The Session-Client Contract makes a number of guarantees with the aim of
- * simplifying the lives of both implementors and clients. The decorator
- * provided by this class spares clients and implementors from writing
- * excessive boilerplate to uphold the contract. The only requirement is that
- * sessions are accessed through the session decorator returned by {@link
- * #decorate()} in client code. The Session-Client Contract allows clients and
- * implementors to make the following assumptions:
- * <ol><li>
- *   Clients may call {@link #open()} multiple times, with subsequent calls
- *   having no effect and always returning a reference to the same bell.
- *   Implementors should assume {@link #open()} will only ever be called once.
- * </li><li>
- *   Clients may perform operations through the session without explicitly
- *   calling {@link #open()}. Implementors should assume {@link #open()} will
- *   have already been called before any operations begin.
- * </li><li>
- *   Clients may call {@link #close()} multiple times, with subsequent calls
- *   having no effect. Implementors should assume {@link #cleanup()} will be
- *   called at most once, the first time {@link #close()} is called.
- * </li></ol>
+ * {@code Resource}s handled by the {@code Session} may be <i>selected</i>
+ * through the {@code Session}, in which case all operations on the {@code
+ * Resource} will be performed in the context of the {@code Session}. Whether
+ * or not a particular {@code Resource} is capable of being handled by the
+ * {@code Session} depends on the URI associated with the {@code Resource} in
+ * question.
+ * </p>
+ * {@code Session}s maintain state information regarding whether or not they
+ * are ready for operation, and can be tested for equality based the URI and
+ * user credentials used to instantiate them. This makes {@code Session}s
+ * suitable for caching and reusing. A {@code Resource} selected on an
+ * unconnected {@code Session} can, for instance, be reselected through an
+ * equivalent {@code Session} that is still "warm", allowing the {@code
+ * Session} to be reused and the initialization overhead to be avoided.
+ *
+ * @see Resource
+ *
+ * @param <S> The type of the subclass of this {@code Session}. This
+ * unfortunate redundancy exists solely to circumvent weaknesses in Java's
+ * typing system.
+ * @param <R> The type of {@code Resource}s handled by this {@code Session}.
  */
-public abstract class Session extends Resource {
+public abstract class Session<S extends Session<S,R>, R extends Resource<S,R>> {
+  /** The URI used to describe this {@code Session}. */
+  public final URI uri;
+
   /** The authentication factor used for this endpoint. */
   public final Credential credential;
 
-  // Ring this with a IOException when it's time to close.
-  private final Bell<Object> doCloseBell = new Bell<Object>() {
-    public void always() { cleanup(); }
+  // If we've already started initializing, this will be non-null.
+  private volatile Bell initializeBell;
+
+  // Rung on close. Avoid letting this leak out.
+  private final Bell<S> onClose = new Bell<S>() {
+    public void always() { Session.this.cleanup(); }
   };
 
-  private final Session decorator = decorate();
-
   /**
-   * Create a session with the given root URI.
+   * Create a {@code Session} with the given root URI.
    *
-   * @param uri a {@link URI} representing the root of the session.
+   * @param uri a {@link URI} representing the root of the {@code Session}.
+   * @throws NullPointerException if {@code root} or {@code uri} is {@code
+   * null}.
    */
-  public Session(URI uri) {
-    this(uri, null);
-  }
+  protected Session(URI uri) { this(uri, null); }
 
   /**
-   * Create a session with the given root URI and credential.
+   * Create a {@code Session} with the given root URI and {@code Credential}.
    *
-   * @param uri a {@link URI} representing the root of the session.
+   * @param uri a {@link URI} describing the {@code Session}.
    * @param credential a {@link Credential} used to authenticate with the
-   * endpoint. May be {@code null} if no additional authentication factors are
-   * required.
-   * @throws NullPointerException if {@code uri} is {@code null}.
+   * endpoint. This may be {@code null} if no additional authentication factors
+   * are required.
+   * @throws NullPointerException if {@code root} or {@code uri} is {@code
+   * null}.
    */
-  public Session(URI uri, Credential credential) {
-    super(uri);
+  protected Session(URI uri, Credential credential) {
+    this.uri = uri;
     this.credential = credential;
   }
 
-  // Constructor used solely by SessionDecorator.
-  private Session(Session other) {
-    this(other.uri, other.credential);
+  /**
+   * Select a {@code Resource} relative to the root {@code Resource} of this
+   * {@code Session} given a {@code String} representation of a {@code Path}.
+   *
+   * @param path the {@code Path} to the {@code Resource} being selected.
+   */
+  public final R select(String path) {
+    return select(Path.create(path));
   }
 
   /**
-   * Return this session wrapped in a decorator which enforces the
-   * Session-Client Contract. Using a session directly without wrapping it in a
-   * decorator is considered to be a programmer error. Subsequent calls to this
-   * method return the same object.
+   * Select a {@code Resource} relative to the root {@code Resource} of this
+   * {@code Session}.
    *
-   * @return this session wrapped in a decorator.
+   * @param path the {@code Path} to the {@code Resource} being selected.
    */
-  public final Session decorate() {
-    if (this instanceof SessionDecorator)
-      return this;
-    if (decorator == null)
-      return new SessionDecorator();
-    return decorator;
-  }
+  public abstract R select(Path path);
 
-  // A decorator which upholds the Session-Client Contract. We give ourselves
-  // CTS writing boilerplate so you don't have to!
-  private class SessionDecorator extends Session {
-    private Bell<Void> openBell = null;
+  /**
+   * Return the root {@code Resource} of this {@code Session}.
+   *
+   * @return The root {@code Resource} of this {@code Session}.
+   */
+  public final R root() { return select(Path.ROOT); }
 
-    public SessionDecorator() {
-      super(Session.this.uri, Session.this.credential);
-    }
-
-    // This really means "opening has definitely completed". This may return
-    // true even if the session is closed, and opening may be in process even
-    // if this returns false.
-    private synchronized boolean isOpen() {
-      return openBell != null && openBell.isDone();
-    }
-
-    // Simple helper class so we don't have TOO much boilerplate. Basically
-    // proxies for another bell from an operation called after open is
-    // complete.
-    private abstract class OnOpen<T> extends Bell<T> {
-      OnOpen() {
-        open().promise(new Bell<Void>() {
-          protected void done() {
-            onClose(task().promise(OnOpen.this));
-          } protected void fail(Throwable t) {
-            OnOpen.this.ring(t);
-          }
-        });
-      } abstract Bell<T> task();
-    }
-
-    public Bell<Stat> stat(final URI uri) {
-      if (isClosed()) return (Bell<Stat>) onClose();
-      if (isOpen())   return onClose(Session.this.stat(uri));
-      return new OnOpen<Stat>() {
-        Bell<Stat> task() { return Session.this.stat(uri); }
-      };
-    }
-
-    public Bell<Void> mkdir(final URI uri) {
-      if (isClosed()) return (Bell<Void>) onClose();
-      if (isOpen())   return onClose(Session.this.mkdir(uri));
-      return new OnOpen<Void>() {
-        Bell<Void> task() { return Session.this.mkdir(uri); }
-      };
-    }
-
-    public Bell<Void> rm(final URI uri) {
-      if (isClosed()) return (Bell<Void>) onClose();
-      if (isOpen())   return onClose(Session.this.rm(uri));
-      return new OnOpen<Void>() {
-        Bell<Void> task() { return Session.this.rm(uri); }
-      };
-    }
-
-    public Bell<Sink> sink(final URI uri) {
-      if (isClosed()) return (Bell<Sink>) onClose();
-      if (isOpen())   return onClose(Session.this.sink(uri));
-      return new OnOpen<Sink>() {
-        Bell<Sink> task() { return Session.this.sink(uri); }
-      };
-    }
-
-    public Bell<Tap> tap(final URI uri) {
-      if (isClosed()) return (Bell<Tap>) onClose();
-      if (isOpen())   return onClose(Session.this.tap(uri));
-      return new OnOpen<Tap>() {
-        Bell<Tap> task() { return Session.this.tap(uri); }
-      };
-    }
-
-    public synchronized Bell<Void> open() {
-      if (openBell != null)
-        return openBell;
-      openBell = Session.this.open();
-      if (openBell == null)  // Some beephead beeped up big time...
-        close("Programmer error in open procedure.");
-      return openBell;
-    }
-
-    public boolean equals(Object o) { return Session.this.equals(o); }
-
-    public int hashCode() { return Session.this.hashCode(); }
+  /**
+   * This is what actually gets called and returned when {@code
+   * Resource.initialize()} is called. It enforces the guarantee that {@code
+   * initialize()} will be called only once, and that the same {@code Bell}
+   * will always be returned. It will also return a failed {@code Bell} if the
+   * {@code Session} is closed.
+   */
+  final synchronized Bell<S> mediatedInitialize() {
+    if (initializeBell != null) {
+      return initializeBell;
+    } try {
+      Bell ib = initialize();
+      initializeBell = (ib != null) ? ib : Bell.rungBell();
+    } catch (Exception e) {
+      initializeBell = new Bell<S>(e);
+    } return initializeBell.as(this);
   }
 
   /**
-   * Select a {@link Resource} from the session, based on a URI.
+   * Prepare the {@code Session} to perform operations on its {@code
+   * Resource}s. The exact nature of this preparation varies from
+   * implementation to implementation, but generally includes establishing
+   * network connections and performing authentication. Access to this method
+   * is mediated such that the implementor may assume that this method will be
+   * called at most once.
+   * <p/>
+   * Implementations may return {@code null} if {@code resource} does not
+   * require any asynchronous initialization. This method may also throw an
+   * {@code Exception} if it is certain that initialization cannot be performed
+   * for some reason (perhaps invalid input). By default, this method returns
+   * {@code null}.
    *
-   * @param uri the URI of the resource to be selected
-   * @return The {@link Resource} identified by the URI.
+   * @return A {@code Bell} which will ring with this {@code Session} when it
+   * is prepared to perform operations on {@code resource}, or {@code null} if
+   * the {@code Resource} requires no initialization.
+   * @throws Exception either via the returned {@code Bell} or from the method
+   * itself if a problem occurs. Subclasses should only declare {@code throws
+   * Exception} in the signature if it actually does so, and should omit it
+   * otherwise.
    */
-  public Resource select(URI uri) {
-    if (uri == null)
-      return decorate();
-    return new Resource(this, uri);
+  protected Bell<S> initialize() throws Exception { return null; }
+
+  /**
+   * Release any resources allocated during the initialization of this {@code
+   * Session}. This method should close any connections and finalize any
+   * ongoing transactions.
+   */
+  protected void cleanup() { }
+
+  protected void finalize() { close(); }
+
+  /**
+   * Close this {@code Session} and call {@code finalize()}. {@code
+   * initialize()} will never be called after this has been called.
+   *
+   * @return This {@code Session}.
+   */
+  public final synchronized S close() { return close(null); }
+
+  /**
+   * Close this {@code Session} due to the given {@code reason}. {@code
+   * initialize()} will never be called after this has been called.
+   *
+   * @param reason a {@code Throwable} explaining why the {@code Session} was
+   * closed.
+   * @return This {@code Session}.
+   */
+  public final synchronized S close(Throwable reason) {
+    if (reason == null)
+      reason = new IllegalStateException("Session is closed.");
+    if (initializeBell != null)
+      initializeBell.ring(reason);
+    initializeBell = new Bell<S>(reason);
+    onClose.ring((S) this);
+    return (S) this;
   }
 
   /**
-   * Get metadata for the given URI, which includes a list of subresources.
+   * Promise to close this channel when {@code bell} rings.
    *
-   * @param uri the URI of the resource to stat.
-   * @return (via bell) A {@link Stat} containing resource metadata.
-   * @throws ResourceException (via bell) if there was an error retrieving
-   * metadata for the resource
-   * @throws UnsupportedOperationException if metadata retrieval is not
-   * supported
+   * @param bell the {@code Bell} to promise the closing of this channel to.
    */
-  public Bell<Stat> stat(URI uri) {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Create the resource specified by the given URI as a directory. If the
-   * resource cannot be created, or already exists and is not a directory, the
-   * returned {@link Bell} will be resolved with a {@link ResourceException}.
-   *
-   * @param uri the URI of the resource to create as a directory.
-   * @return (via bell) {@code null} if successful.
-   * @throws ResourceException (via bell) if the directory could not be created
-   * or already exists and is not a directory
-   * @throws UnsupportedOperationException if creating directories is not
-   * supported
-   * @see Bell
-   */
-  public Bell<Void> mkdir(URI uri) {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Delete the resource specified by a URI and all subresources from the
-   * storage system. If the resource cannot be removed, the returned {@link
-   * Bell} will be resolved with a ResourceException.
-   *
-   * @param uri the URI of the resource to remove.
-   * @return (via bell) {@code null} if successful.
-   * @throws ResourceException (via bell) if the resource could not be fully
-   * removed
-   * @throws UnsupportedOperationException if removal is not supported
-   * @see Bell
-   */
-  public Bell<Void> rm(URI uri) {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Open a sink to the resource at the specified URI. Any connection
-   * operation, if necessary, should begin as soon as this method is called.
-   * The returned bell should be rung once the sink is ready to accept data.
-   *
-   * @param uri the URI of the resource to open a sink to.
-   * @return (via bell) A sink which drains to the named resource.
-   * @throws ResourceException (via bell) if opening the sink fails
-   * @throws UnsupportedOperationException if the resource does not support
-   * writing
-   * @see Bell
-   */
-  public Bell<Sink> sink(URI uri) {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Open a tap on the resource at the specified URI. Any connection operation,
-   * if necessary, should begin, as soon as this method is called. The returned
-   * bell should be rung once the tap is ready to emit data.
-   *
-   * @param uri the URI of the resource to open a tap on.
-   * @return (via bell) A tap which emits slices from this resource and its
-   * subresources.
-   * @throws ResourceException (via bell) if opening the tap fails
-   * @throws UnsupportedOperationException if the resource does not support
-   * reading
-   * @see Bell
-   */
-  public Bell<Tap> tap(URI uri) {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Begin the connection and authentication procedure with the endpoint
-   * system. Subsequent calls to this method should return the same bell.
-   *
-   * @return (via bell) {@code null}, once opening has completed. If this bell
-   * is cancelled before the session has been established, the opening
-   * procedure should be terminated.
-   */
-  public Bell<Void> open() { return new Bell<Void>().ring(); }
-
-  /**
-   * Subclasses should override this to start the cleanup procedure during
-   * closing. Cleanup should be performed asynchronously and this method should
-   * return immediately.
-   */
-  public void cleanup() { }
-
-  /**
-   * Inform the session that it is no longer needed and should close any open
-   * resources. This will also cancel the opening procedure if it has begun.
-   */
-  public final void close() { close(null, null); }
-
-  /**
-   * Inform the session that it is no longer needed and should close any open
-   * resources, using {@code reason} as the explanation for closing. This will
-   * also cancel the opening procedure if it has begun.
-   *
-   * @param reason the reason for closing this session.
-   */
-  public final void close(String reason) { close(reason, null); }
-
-  /**
-   * Inform the session that it is no longer needed and should close any open
-   * resources, using {@code cause} as the cause for closing. This will
-   * also cancel the opening procedure if it has begun.
-   *
-   * @param cause the exception that caused this session to close.
-   */
-  public final void close(Throwable cause) { close(null, cause); }
-
-  /**
-   * Inform the session that it is no longer needed and should close any open
-   * resources, using {@code reason} as the explanation for closing and {@code
-   * cause} as the cause for closing. This will also cancel the opening
-   * procedure if it has begun.
-   *
-   * @param reason the reason for closing this session.
-   * @param cause the exception that caused this session to close.
-   */
-  public final void close(String reason, Throwable cause) {
-    doCloseBell.ring(new IOException(reason, cause));
+  public final synchronized void closeWhen(Bell bell) {
+    bell.new Promise() {
+      public void done()            { close(); }
+      public void fail(Throwable t) { close(t); }
+    };
   }
 
   /**
@@ -322,42 +192,34 @@ public abstract class Session extends Resource {
    *
    * @return {@code true} if closing has begun; {@code false} otherwise.
    */
-  public synchronized boolean isClosed() {
-    return doCloseBell.isDone();
+  public final synchronized boolean isClosed() {
+    return onClose.isDone();
   }
 
   /**
-   * Return a bell that will be rung with a {@code IOException} when
-   * the session is closed. This is the same is calling {@code onClose(new
-   * Bell<T>())}.
+   * Return a bell that will be rung with this {@code Session} when the {@code
+   * Session} is closed.
    *
-   * @return The value passed in for {@code bell}.
-   * @throws IOException (via bell) when the session has begun closing.
+   * @return A {@code Bell} that will be rung when the {@code Session} is
+   * closed.
    */
-  public final Bell<?> onClose() {
-    return onClose(new Bell());
+  public final Bell<S> onClose() {
+    return onClose.new Promise();
   }
 
   /**
-   * Register a bell to be rung with a {@code IOException} when the
-   * session has begun its closing procedure.
+   * Register a {@code Bell} to be rung with this {@code Session} when the
+   * {@code Session} is closed. This is slightly more memory-efficient than
+   * promising on the {@code Bell} returned by {@link #onClose()}, as it
+   * gets promised to an internal {@code Bell} directly.
    *
-   * @return The value passed in for {@code bell}.
-   * @param bell the bell to ring with a {@code IOException} when
-   * the session is closed.
-   * @throws IOException (via {@code bell}) when the session has
-   * begun closing.
+   * @param bell a {@code Bell} that will be rung when the {@code Session} is
+   * closed.
+   * @return Whatever value was passed in for {@code bell}.
    */
-  public final <T> Bell<T> onClose(Bell<T> bell) {
-    final Bell<Object> b = (Bell<Object>) bell;
-    return (b != null) ? (Bell<T>) doCloseBell.promise(b) : null;
+  public final Bell<? super S> onClose(Bell<? super S> bell) {
+    return onClose.promise(bell);
   }
-
-  /**
-   * If all references to this session have been lost, begin the closing
-   * procedure.
-   */
-  protected final void finalize() { close(); }
 
   public String toString() {
     return uri.toString();

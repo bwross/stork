@@ -1,11 +1,11 @@
 package stork.cred;
 
 import stork.ad.*;
+import stork.feather.*;
 import stork.util.*;
 
 import java.util.*;
 import java.io.*;
-import java.net.*;
 
 import org.globus.myproxy.*;
 import org.ietf.jgss.*;
@@ -28,7 +28,7 @@ public class StorkGSSCred extends StorkCred<GSSCredential> {
 
   // Create a credential from MyProxy.
   public StorkGSSCred(URI u) {
-    this(u.getHost(), u.getPort(), StorkUserinfo.split(u));
+    this(u.host(), u.port(), u.userPass());
   } public StorkGSSCred(String h, int i, String[] ui) {
     this(h, i, ui[0], ui[1]);
   } public StorkGSSCred(String h, int i, String u, String p) {
@@ -100,7 +100,7 @@ public class StorkGSSCred extends StorkCred<GSSCredential> {
 
   // Create a new credential using MyProxy.
   public static StorkGSSCred fromMyProxy(String uri) {
-    return fromMyProxy(StorkUtil.makeURI(uri));
+    return fromMyProxy(URI.create(uri));
   } public static StorkGSSCred fromMyProxy(URI uri) {
     return new StorkGSSCred(uri);
   }

@@ -3,6 +3,7 @@ package stork.client;
 import stork.*;
 import stork.ad.*;
 import stork.util.*;
+import stork.feather.util.*;
 
 public class StorkQ extends StorkClient {
   boolean count_only = false;
@@ -82,12 +83,12 @@ public class StorkQ extends StorkClient {
     System.out.printf("%3s  %-12s  %8s  %8s\n", "", "", "time", "time");
   } private String time(Ad ad) {
     if (ad == null) return "";
-    Watch w = ad.unmarshalAs(Watch.class);
+    Time w = ad.unmarshalAs(Time.class);
     return w.toString();
   } private String progressBar(Ad ad, int len) {
     if (ad == null) return "";
     Progress prog = ad.unmarshalAs(Progress.class);
-    int j = (prog.total > 0) ? (int)(len * prog.done / prog.total) : 0;
+    int j = (prog.total() > 0) ? (int)(len * prog.done() / prog.total()) : 0;
     char[] bar = new char[len];
 
     if (j >= len)
@@ -97,15 +98,15 @@ public class StorkQ extends StorkClient {
       bar[i] = ' ';
     for (int i = 0; i < j; i++)
       bar[i] = '=';
-    if (prog.done > 0)
-      bar[j] = (prog.done != prog.total) ? '>' : '=';
+    if (prog.done() > 0)
+      bar[j] = (prog.done() != prog.total()) ? '>' : '=';
     return "    ["+new String(bar)+"] "+prog.toPercent();
   } private void formatJobAd(Ad ad) {
     System.out.printf("%3d  %-12s  %8s  %8s  %9s  %s\n",
         ad.getInt("job_id"), ad.get("status", "(unknown)"),
         time(ad.getAd("queue_timer")), time(ad.getAd("run_timer")),
-        StorkUtil.prettySize(ad.getLong("progress.bytes.total")),
-        Throughput.pretty(ad.getLong("progress.bytes.avg")));
+        Throughput.prettySize(ad.getLong("progress.bytes.total")),
+        Throughput.format(ad.getLong("progress.bytes.avg")));
     if (ad.getInt("progress.bytes.avg") > 0)
       System.out.println(progressBar(ad.getAd("progress.bytes"), 50));
 

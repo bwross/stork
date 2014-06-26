@@ -1,47 +1,56 @@
 package stork.feather.util;
 
-import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
+
 import stork.feather.*;
 
 /**
- * A "connection" to the local file system, used for testing Feather
- * implementations.
+ * A {@code Session} capable of interacting with the local file system. This is
+ * intended to serve as an example Feather implementation, but can also be used
+ * for testing other implementations.
+ * <p/>
+ * Many of the methods in this session implementation perform long-running
+ * operations concurrently using threads because this is the most
+ * straighforward way to demonstrate the asynchronous nature of session
+ * operations. However, this is often not the most efficient way to perform
+ * operations concurrently, and ideal implementations would use an alternative
+ * method.
  */
-/*
-public abstract class LocalSession extends LocalResource {
-  private final File root;
+public class LocalSession extends Session<LocalSession,LocalResource> {
+  final ScheduledThreadPoolExecutor executor =
+    new ScheduledThreadPoolExecutor(1);
+  final Path path;
 
-  public LocalSession(String u) {
-    super(URI.create("file:"+u));
-    root = new File(u);
+  /** Create a {@code LocalSession} at the system root. */
+  public LocalSession() { this(Path.ROOT); }
+
+  /** Create a {@code LocalSession} at {@code path}. */
+  public LocalSession(Path path) {
+    super(URI.create("file:"+path));
+    this.path = path;
   }
 
-  public abstract Bell<Stat> stat(String path) {
-    File f = new File(root, path);
-    return null;
+  public LocalResource select(Path path) {
+    return new LocalResource(this, path);
   }
 
-  // Create a directory at the end-point, as well as any parent directories.
-  public abstract Bell<Void> mkdir(String path);
+  protected void finalize() {
+    executor.shutdown();
+  }
 
-  // Remove a file or directory.
-  public abstract Bell<Void> rm(String path);
+  public static void main(String[] args) {
+    String sp = args.length > 0 ? args[0] : "/home/bwross/test";
+    final Path path = Path.create(sp);
+    final LocalResource s = new LocalSession(path).root();
+    final HexDumpResource d = new HexDumpResource();
 
-  // Close the session and free any resources. This should return immediately,
-  // disallowing any further interaction, and begin the closing procedure
-  // asynchronously. The cleanup should try to happen as quickly and quietly as
-  // possible.
-  public abstract Bell<Void> close();
-
-  // Create an identical session with the same settings.
-  //public abstract Session duplicate();
-
-  // Return a tap to the resource returned by selecting the root URI.
-  public abstract Bell<Tap> tap();
-
-  // Return a sink to the resource returned by selecting the root URI.
-  public abstract Bell<Sink> sink() {
-    return select(uri).sink();
+    Transfer t = s.transferTo(d);
+    t.starter.ring();
+    t.onStop().new Promise() {
+      public void always() {
+        s.session.close();
+      }
+    }.sync();
   }
 }
-*/

@@ -1,4 +1,4 @@
-package stork.feather;
+package stork.feather.util;
 
 import java.lang.ref.*;
 import java.util.*;
@@ -25,7 +25,7 @@ public class Intern<O> {
    * the intern map, it becomes the canonical reference. Otherwise the
    * canonical internalized reference is returned.
    */
-  public O intern(O k) {
+  public synchronized O intern(O k) {
     if (k == null)
       return null;
 

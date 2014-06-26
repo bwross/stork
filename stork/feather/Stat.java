@@ -12,19 +12,21 @@ import stork.feather.util.*;
  */
 public class Stat {
   /** The name of the resource. */
-  public String     name;
+  public String  name;
   /** The size of the resource in bytes. */
-  public long       size;
+  public long    size;
   /** The modification time of the resource in Unix time. */
-  public long       time;
+  public long    time;
   /** Whether or not the resource is a directory. */
-  public boolean    dir;
+  public boolean dir;
   /** Whether or not the resource is a file. */
-  public boolean    file;
+  public boolean file;
+  /** If the resource is a link, the link target. */
+  public Path    link;
   /** An implementation-specific permissions string. */
-  public String     perm;
+  public String  perm;
   /** An array of subresources, if known. */
-  public Stat[]     files;
+  public Stat[]  files;
 
   private transient long total_size = -1;
   private transient long total_num  =  0;
@@ -35,12 +37,10 @@ public class Stat {
   public Stat() { this(null); }
 
   /**
-   * Create a new {@code Stat} with the given name. The name will be
-   * internalized for the sake of conserving memory.
+   * Create a new {@code Stat} with the given name.
    */
-  public Stat(CharSequence name) {
-    if (name != null)
-      this.name = Intern.string(name.toString());
+  public Stat(String name) {
+    this.name = name;
   }
 
   /**
@@ -61,12 +61,12 @@ public class Stat {
    * Copy the data from the passed file tree into this one.
    */
   public Stat copy(Stat ft) {
-    if (name == null)
-      name = ft.name;
+    name = ft.name;
     size = ft.size;
     time = ft.time;
     dir  = ft.dir;
     file = ft.file;
+    link = ft.link;
     perm = ft.perm;
     return this;
   }
@@ -108,5 +108,27 @@ public class Stat {
     total_num  =  0;
 
     return this;
+  }
+
+  /**
+   * Set the files underneath this tree given only their names.
+   */
+  public Stat setFiles(String[] names) {
+    if (names == null) {
+      files = null;
+    } else {
+      Stat[] stats = new Stat[names.length];
+      for (int i = 0; i < stats.length; i++)
+        stats[i] = new Stat(names[i]);
+      files = stats;
+      total_size = -1;
+      total_num  =  0;
+    }
+
+    return this;
+  }
+
+  public String toString() {
+    return stork.ad.Ad.marshal(this).toString();
   }
 }
