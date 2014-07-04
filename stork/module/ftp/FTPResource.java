@@ -259,5 +259,5 @@ class FTPSink extends Sink<FTPResource> {
     return dc.send(slice);
   }
 
-  public void finish() { }
+  public void finish() { dc.close(); }
 }

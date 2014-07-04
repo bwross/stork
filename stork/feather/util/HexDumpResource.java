@@ -55,7 +55,7 @@ class HexDumpSink extends Sink<HexDumpResource> {
   public Bell drain(Slice slice) {
     ByteBuf buf = slice.asByteBuf();
     //destination().out.println(ByteBufUtil.hexDump(buf));
-    //destination().out.println(slice.length());
+    destination().out.println(slice.length());
     total += slice.length();
     HexDumpResource.throughput.update(slice.length());
     buf.release();

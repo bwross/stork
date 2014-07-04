@@ -16,7 +16,7 @@ public class Emitter<T> extends Bell {
 
   // When done, finalize and clear the queue.
   {
-    new Promise() {
+    this.new Promise() {
       public void done()            { finalizeRemaining(null); }
       public void fail(Throwable t) { finalizeRemaining(t); }
     };

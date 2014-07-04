@@ -499,8 +499,8 @@ public class Bell<T> implements Future<T> {
    */
   public final <V> Bell<V> as(final V done) {
     final Bell<V> bell = new Bell<V>();
-    new Promise() {
-      public void then() { bell.ring(done); }
+    this.new Promise() {
+      public void done() { bell.ring(done); }
       public void fail(Throwable t) { bell.ring(t); }
     };
     return bell;
@@ -515,7 +515,7 @@ public class Bell<T> implements Future<T> {
    */
   public final <V> Bell<V> as(final V done, final V fail) {
     final Bell<V> bell = new Bell<V>();
-    new Promise() {
+    this.new Promise() {
       public void done() { bell.ring(done); }
       public void fail() { bell.ring(fail); }
     };
@@ -608,7 +608,7 @@ public class Bell<T> implements Future<T> {
   public Bell<T> or(final Bell<T> other) {
     if (isDone())
       return other;
-    return new Promise() {
+    return this.new Promise() {
       public void then(Throwable err) { other.promise(this); }
     };
   }
@@ -626,7 +626,7 @@ public class Bell<T> implements Future<T> {
       return (Bell<V>) this;
     if (isDone())
       return other;
-    return new AsBell<V>() {
+    return this.new AsBell<V>() {
       public Bell<V> convert(T t) { return other; }
     };
   }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry including="stork/**" kind="src" path=""/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="lib/cog-jglobus-1.8.0.jar"/>
+	<classpathentry kind="lib" path="lib/cog-jobmanager-1.8.0.jar"/>
+	<classpathentry kind="lib" path="lib/cog-url-1.8.0.jar"/>
+	<classpathentry kind="lib" path="lib/commons-logging-1.1.jar"/>
+	<classpathentry kind="lib" path="lib/cryptix-asn1.jar"/>
+	<classpathentry kind="lib" path="lib/cryptix.jar"/>
+	<classpathentry kind="lib" path="lib/cryptix32.jar"/>
+	<classpathentry kind="lib" path="lib/jce-jdk13-131.jar"/>
+	<classpathentry kind="lib" path="lib/jgss.jar"/>
+	<classpathentry kind="lib" path="lib/jsch-0.1.50.jar"/>
+	<classpathentry kind="lib" path="lib/log4j-1.2.13.jar"/>
+	<classpathentry kind="lib" path="lib/netty-all-5.0.0.Alpha1.jar"/>
+	<classpathentry kind="lib" path="lib/puretls.jar"/>
+	<classpathentry kind="lib" path="C:/Users/dutia_000/workspace/NettyHttp/netty-4.0.19.Final/jar/all-in-one/netty-all-4.0.19.Final.jar"/>
+	<classpathentry kind="lib" path="C:/Users/dutia_000/workspace/NettyHttp/netty-4.0.19.Final/jar/all-in-one/netty-all-4.0.19.Final-sources.jar"/>
+	<classpathentry kind="lib" path="lib/junit.jar"/>
+	<classpathentry kind="output" path="build"/>
+</classpath>
