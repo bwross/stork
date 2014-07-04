@@ -15,8 +15,6 @@
 	<classpathentry kind="lib" path="lib/log4j-1.2.13.jar"/>
 	<classpathentry kind="lib" path="lib/netty-all-5.0.0.Alpha1.jar"/>
 	<classpathentry kind="lib" path="lib/puretls.jar"/>
-	<classpathentry kind="lib" path="C:/Users/dutia_000/workspace/NettyHttp/netty-4.0.19.Final/jar/all-in-one/netty-all-4.0.19.Final.jar"/>
-	<classpathentry kind="lib" path="C:/Users/dutia_000/workspace/NettyHttp/netty-4.0.19.Final/jar/all-in-one/netty-all-4.0.19.Final-sources.jar"/>
 	<classpathentry kind="lib" path="lib/junit.jar"/>
 	<classpathentry kind="output" path="build"/>
 </classpath>
