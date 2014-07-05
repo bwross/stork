@@ -28,7 +28,7 @@ public class FTPSession extends Session<FTPSession, FTPResource> {
   }
 
   public Bell<FTPSession> initialize() {
-    return new Bell<Object>() {{
+    return new Bell() {{
       String user = "anonymous";
       String pass = "stork@storkcloud.org";
  
@@ -64,7 +64,9 @@ public class FTPSession extends Session<FTPSession, FTPResource> {
         // Unsupported credential...
         ring(new IllegalArgumentException("credential"));
       }
-    }}.as(FTPSession.this);
+    }}.as(FTPSession.this).new Promise() {
+      public void done() { channel.new Command("DCAU N"); }
+    };
   }
 
   public void cleanup() {

@@ -153,14 +153,18 @@ public class Pipe {
    * some reason known immediately. The default implementation will never
    * throw.
    */
-  protected synchronized Bell drain(Slice slice) throws Exception {
+  protected Bell drain(Slice slice) throws Exception {
     if (!finished) try {
       Bell bell = downstream().drain(slice);
       if (bell == null)
         bell = Bell.rungBell();
-      return lastDrain = bell;
+      synchronized (this) {
+        return lastDrain = bell;
+      }
     } catch (Exception e) {
-      return lastDrain = new Bell(e);
+      synchronized (this) {
+        return lastDrain = new Bell(e);
+      }
     } throw new RuntimeException("The pipeline is finished.");
   }
 
@@ -180,9 +184,13 @@ public class Pipe {
       Bell bell = downstream().drain(error);
       if (bell == null)
         bell = Bell.rungBell();
-      return lastDrain = bell;
+      synchronized (this) {
+        return lastDrain = bell;
+      }
     } catch (Exception e) {
-      return lastDrain = new Bell(e);
+      synchronized (this) {
+        return lastDrain = new Bell(e);
+      }
     } throw new RuntimeException("The pipeline is finished.");
   }
 
@@ -194,7 +202,9 @@ public class Pipe {
    */
   protected synchronized void finish() {
     if (!finished) {
-      lastDrain.new Promise() {
+      if (lastDrain == null) {
+        downstream().finish();
+      } else lastDrain.new Promise() {
         public void always() { downstream().finish(); }
       };
       lastDrain = null;
@@ -212,7 +222,9 @@ public class Pipe {
    */
   protected synchronized void finish(final Throwable error) {
     if (!finished) {
-      lastDrain.new Promise() {
+      if (lastDrain == null) {
+        downstream().finish(error);
+      } else lastDrain.new Promise() {
         public void always() { downstream().finish(error); }
       };
       lastDrain = null;
@@ -241,6 +253,6 @@ public class Pipe {
   }
 
   public String toString() {
-    return getClass().getSimpleName();
+    return getClass().toString();
   }
 }
