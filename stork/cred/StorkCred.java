@@ -10,7 +10,6 @@ import stork.util.*;
 public abstract class StorkCred<O> extends Credential<O> {
   public final String type;
   public String name;
-  public Watch time = new Watch();
 
   public StorkCred(String type) {
     this(null, type);
@@ -38,7 +37,6 @@ public abstract class StorkCred<O> extends Credential<O> {
   // information.
   public Ad getAd() {
     return new Ad("name", name)
-             .put("type", type)
-             .put("time", time);
+             .put("type", type);
   }
 }

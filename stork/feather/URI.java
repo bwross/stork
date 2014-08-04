@@ -1,9 +1,10 @@
 package stork.feather;
 
+import java.util.*;
+
 import stork.feather.util.*;
 
 /**
- * <p>
  * A representation of a Uniform Resource Identifier (URI). The getter methods
  * of this class which return single components will return unescaped (decoded)
  * representations, and likewise the single-component setter methods expect
@@ -11,13 +12,10 @@ import stork.feather.util.*;
  * groups will return representations with escaped (encoded) subcomponents and
  * unescaped joiners, and likewise the component group setter methods expect
  * escaped inputs with unescaped joiners.
- * </p>
- *
- * <p>
+ * <p/>
  * The syntax of URIs in Feather conform to the URI generic syntax defined in
  * RFC 3986. However, some non-standard component groups are also defined for
  * URLs, as shown in this diagram:
- * </p>
  *
  * <blockquote><pre>
  *                       authority
@@ -32,124 +30,95 @@ import stork.feather.util.*;
  *                  endpoint                   resource
  * </pre></blockquote>
  *
- * <p>
- * This class is left abstract, allowing users to provide their own URI
- * implementation or an adapter allowing an existing one to be used wherever a
- * Feather URI is expected. A default implementation is provided, which takes
- * advantage of the interning utility provided by Feather for improved storage
- * performance. The default implementation may be accessed through the static
- * {@link #create(String)} method.
- * </p>
- * 
- * <p>
- * This interface is inspired heavily by URI.js, which can be found here:
- * </p>
+ * The API is inspired heavily by URI.js, which can be found here:
  *
  * <blockquote>{@code https://github.com/medialize/URI.js}</blockquote>
  */
-public abstract class URI {
-  private static Intern<URI> intern = new Intern<URI>();
+public class URI {
+  private final String scheme;
+  private final String userinfo;
+  private final String host;
+  private final int    port;
+  private final Path   path;
+  private final String query;
+  private final String fragment;
+
+  //private static Intern<URI> intern = new Intern<URI>();
+
+  // Used to quickly determine if a character is reserved.
+  private static final BitSet RESERVED = new BitSet(128);
+  static {
+    for (char c : " !#$%&'()*+,/:;=?@[]{}".toCharArray())
+      RESERVED.set(c);
+  }
+
+  /** The canonical empty URI. */
+  public static final URI EMPTY = new URI();
+
+  private URI() {
+    scheme   = null;
+    userinfo = null;
+    host     = null;
+    port     = -1;
+    path     = null;
+    query    = null;
+    fragment = null;
+  }
+
+  private URI(String uri) {
+    // For now, delegate to java.net.URI...
+    java.net.URI u = java.net.URI.create(uri);
+
+    scheme   = u.getScheme();
+    userinfo = u.getUserInfo();
+    host     = u.getHost();
+    port     = u.getPort();
+    path     = Path.create(u.getPath());
+    query    = u.getQuery();
+    fragment = u.getFragment();
+  }
+
+  private URI(URIBuilder builder) {
+    this.scheme   = builder.scheme;
+    this.userinfo = builder.userinfo;
+    this.host     = builder.host;
+    this.port     = builder.port;
+    this.path     = builder.path;
+    this.query    = builder.query;
+    this.fragment = builder.fragment;
+  }
+
+  class URIBuilder {
+    String scheme   = URI.this.scheme;
+    String userinfo = URI.this.userinfo;
+    String host     = URI.this.host;
+    int    port     = URI.this.port;
+    Path   path     = URI.this.path;
+    String query    = URI.this.query;
+    String fragment = URI.this.fragment;
+
+    URI toURI() { return new URI(this); }
+  }
 
   /**
-   * Intern a given URI, and return an immutable canonical representation of
-   * the URI. If the URI is mutable, an immutable copy is made using {@code
-   * #makeImmutable()} and stored in the intern.
+   * Return a canonical representation of the URI.
    *
-   * @param uri the URI which should be interned
-   * @return An immutable canonical representation of the URI.
+   * @param uri the URI which should be interned.
+   * @return A canonical representation of {@code uri}.
    */
-  public static URI intern(URI uri) {
-    return intern.intern(uri.makeImmutable());
-  }
+  //public static URI intern(URI uri) {
+    //return intern.intern(uri);
+  //}
 
   /**
    * Create a URI from the given string representation.
    *
-   * @param uri a string representation of the URI to parse
+   * @param uri a string representation of the URI to parse.
    * @return A parsed URI.
    */
   public static URI create(String uri) {
-    return intern.intern(new FeatherURI(uri));
-  }
-
-
-  /**
-   * This is the default mutable URI implementation. A builder utility, similar
-   * in spirit to {@link StringBuilder}, for efficiently creating URIs
-   * component-wise.
-   */
-  public static class Builder extends URI {
-    private String scheme, userinfo, host, query, fragment;
-    private Path path;
-    private int port = -1;
-
-    /**
-     * Create a URI builder with empty components.
-     */
-    public Builder() { }
-
-    /**
-     * Create a URI builder with given URI's components.
-     * @param uri the URI to initialize this URI with
-     */
-    public Builder(URI uri) {
-      scheme   = uri.scheme();
-      userinfo = uri.userInfo();
-      host     = uri.host();
-      port     = uri.port();
-      path     = uri.path();
-      query    = uri.query();
-      fragment = uri.fragment();
-    }
-
-    public String scheme() {
-      return scheme;
-    } public URI scheme(String scheme) {
-      this.scheme = scheme;
-      return this;
-    }
-
-    public String userInfo() {
-      return userinfo;
-    } public URI userInfo(String userinfo) {
-      this.userinfo = userinfo;
-      return this;
-    }
-
-    public String host() {
-      return host;
-    } public int port() {
-      return port;
-    } public URI hostPort(String host, int port) {
-      this.host = host;
-      this.port = port;
-      return this;
-    }
-
-    public Path path() {
-      return path;
-    } public URI path(Path path) {
-      this.path = path;
-      return this;
-    }
-
-    public String query() {
-      return query;
-    } public URI query(String query) {
-      this.query = query;
-      return this;
-    }
-
-    public String fragment() {
-      return fragment;
-    } public URI fragment(String fragment) {
-      this.fragment = fragment;
-      return this;
-    }
-
-    public boolean isMutable() {
-      return true;
-    }
+    //return intern.intern(new URI(uri));
+    return new URI(uri);
   }
 
   /**
@@ -166,16 +135,18 @@ public abstract class URI {
    *
    * @return The scheme component of this URI, or {@code null} if undefined.
    */
-  public abstract String scheme();
+  public String scheme() { return scheme; }
 
   /**
    * Return a URI based on this one with the given scheme (or protocol)
    * component.
    *
+   * @param scheme the scheme for the new URI.
    * @return A URI based on this one with the given scheme component.
-   * @param scheme the scheme for the new URI
    */
-  public abstract URI scheme(String scheme);
+  public URI scheme(String scheme) {
+    return new URIBuilder() {{ this.scheme = scheme; }}.toURI();
+  }
 
   /**
    * Get the protocol (or scheme) component of this URI. This is an alias for
@@ -192,7 +163,7 @@ public abstract class URI {
    * Return a URI based on this one with the given protocol (or scheme)
    * component. This is an alias for {@link #scheme(String)}.
    *
-   * @param protocol the protocol for the new URI
+   * @param protocol the protocol for the new URI.
    * @return A URI based on this one with the given scheme component.
    */
   public final URI protocol(String protocol) {
@@ -212,7 +183,7 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given username component.
    *
-   * @param username the new username
+   * @param username the new username.
    * @return A URI based on this one with the given username component.
    */
   public URI username(String username) {
@@ -232,9 +203,9 @@ public abstract class URI {
 
   /**
    * Return a URI based on this one with the given username component. This
-   * is an alias for {@link username(String)}.
+   * is an alias for {@link #username(String)}.
    *
-   * @param username the new username
+   * @param username the new username.
    * @return A URI based on this one with the given username component.
    */
   public final URI user(String username) {
@@ -254,7 +225,7 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given password component.
    *
-   * @param password the new password
+   * @param password the new password.
    * @return A URI based on this one with the given password component.
    */
   public URI password(String password) {
@@ -274,9 +245,9 @@ public abstract class URI {
 
   /**
    * Return a URI based on this one with the given password component. This is
-   * an alias for {@link password(String)}.
+   * an alias for {@link #password(String)}.
    *
-   * @param password the new password
+   * @param password the new password.
    * @return A URI based on this one with the given password component.
    */
   public final URI pass(String password) {
@@ -297,8 +268,8 @@ public abstract class URI {
       return new String[2];
     int i = cs.indexOf(':');
     return new String[] {
-      unescape((i < 0) ? cs   : (i > 0) ? cs.substring(0,i) : null),
-      unescape((i < 0) ? null : cs.substring(i+1))
+      decode((i < 0) ? cs   : (i > 0) ? cs.substring(0,i) : null),
+      decode((i < 0) ? null : cs.substring(i+1))
     };
   }
 
@@ -306,13 +277,13 @@ public abstract class URI {
    * Return a URI based on this one with the given username and password
    * component.
    *
-   * @param userpass the new username and password
+   * @param userpass the new username and password.
    * @return A URI based on this one with the given user-info component.
    */
   public URI userPass(String... userpass) {
     String u = (userpass.length > 0) ? userpass[0] : null;
     String p = (userpass.length > 1) ? userpass[1] : null;
-    return userInfo(escape(u)+":"+escape(p));
+    return userInfo(encode(u)+":"+encode(p));
   }
 
   /**
@@ -323,15 +294,17 @@ public abstract class URI {
    *
    * @return The user-info segment of the URI.
    */
-  public abstract String userInfo();
+  public String userInfo() { return userinfo; }
 
   /**
    * Return a URI based on this one with the given user-info component.
    *
-   * @param userinfo the new user-info
+   * @param userinfo the new user-info.
    * @return A URI based on this one with the given user-info component.
    */
-  public abstract URI userInfo(String userinfo);
+  public URI userInfo(String userinfo) {
+    return new URIBuilder() {{ this.userinfo = userinfo; }}.toURI();
+  }
 
   /**
    * Get the host from the authority segment of the URI, if this is a URL.
@@ -339,16 +312,16 @@ public abstract class URI {
    * @return The host according to the authority segment of the URI, or {@code
    * null} if none is specified.
    */
-  public abstract String host();
+  public String host() { return host; }
 
   /**
    * Return a URI based on this one with the given host component.
    *
-   * @param host the new host, unescaped and unbracketed
+   * @param host the new host, unescaped and unbracketed.
    * @return A URI based on this one with the given host component.
    */
   public URI host(String host) {
-    return hostPort(host, port());
+    return new URIBuilder() {{ this.host = host; }}.toURI();
   }
 
   /**
@@ -357,16 +330,16 @@ public abstract class URI {
    * @return The port according to the authority segment of the URI, or {@code
    * -1} if none is specified.
    */
-  public abstract int port();
+  public int port() { return port; }
 
   /**
    * Return a URI based on this one with the given port component.
    *
-   * @param port the new port
+   * @param port the new port.
    * @return A URI based on this one with the given port component.
    */
   public URI port(int port) {
-    return hostPort(host(), port);
+    return new URIBuilder() {{ this.port = port; }}.toURI();
   }
 
   /**
@@ -391,7 +364,7 @@ public abstract class URI {
    * Return a URI based on this one with the given host and port components.
    *
    * @param hostport the new host, escaped and bracketed, concatenated with the
-   * port with a colon separator
+   * port with a colon separator.
    * @return A URI based on this one with the given host and port components.
    */
   public URI hostPort(String hostport) {
@@ -404,8 +377,8 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given host and port components.
    *
-   * @param host the new host, unescaped and unbracketed
-   * @param port the new port as a string
+   * @param host the new host, unescaped and unbracketed.
+   * @param port the new port as a string.
    * @return A URI based on this one with the given host and port components.
    */
   public URI hostPort(String host, String port) {
@@ -419,11 +392,16 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given host and port components.
    *
-   * @param host the new host, unescaped and unbracketed
-   * @param port the new port
+   * @param host the new host, unescaped and unbracketed.
+   * @param port the new port.
    * @return A URI based on this one with the given host and port components.
    */
-  public abstract URI hostPort(String host, int port);
+  public URI hostPort(String host, int port) {
+    return new URIBuilder() {{
+      this.host = host;
+      this.port = port;
+    }}.toURI();
+  }
 
   /**
    * Get the authority component of the URI in the form of:
@@ -449,7 +427,7 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given authority segment.
    *
-   * @param authority the new authority component
+   * @param authority the new authority component.
    * @return A URI based on this one with the given authority component.
    */
   public URI authority(String authority) {
@@ -465,12 +443,12 @@ public abstract class URI {
    * @return The path segment of this URI, or {@code null} if none is
    * specified.
    */
-  public abstract Path path();
+  public Path path() { return path; }
 
   /**
    * Return a URI based on this one with the given path segment.
    *
-   * @param path the new path, with escaped segments
+   * @param path the new path, with escaped segments.
    * @return A URI based on this one with the given path component.
    */
   public URI path(String path) {
@@ -480,15 +458,17 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given path segment.
    *
-   * @param path the new path
+   * @param path the new path.
    * @return A URI based on this one with the given path component.
    */
-  public abstract URI path(Path path);
+  public URI path(Path path) {
+    return new URIBuilder() {{ this.path = path; }}.toURI();
+  }
 
   /**
    * Return a URI based on this one with the given path segment appended.
    *
-   * @param path the path to append, as an escaped string
+   * @param path the path to append, as an escaped string.
    * @return A URI based on this one with the given path appended.
    */
   public URI append(String path) {
@@ -499,7 +479,7 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given path segment appended.
    *
-   * @param path the path to append
+   * @param path the path to append.
    * @return A URI based on this one with the given path appended.
    */
   public URI append(Path path) {
@@ -510,13 +490,13 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given path segment appended.
    *
-   * @param segment the path segment to append, as an unescaped string
+   * @param name the literal name of the segment to append.
    * @return A URI based on this one with the given path segment appended.
    */
-  public URI appendSegment(String segment) {
+  public URI appendLiteral(String name) {
     Path p = path();
-    return (p == null) ? path(Path.create(escape(segment))) :
-                         path(p.appendSegment(segment));
+    return (p == null) ? path(Path.create(encode(name))) :
+                         path(p.appendLiteral(name));
   }
 
   /**
@@ -535,15 +515,17 @@ public abstract class URI {
    * @return The query component of this URI, or {@code null} if none is
    * specified.
    */
-  public abstract String query();
+  public String query() { return query; }
 
   /**
    * Return a URI based on this one with the given query component.
    *
-   * @param query the new query string
+   * @param query the new query string.
    * @return A URI based on this one with the given query segment.
    */
-  public abstract URI query(String query);
+  public URI query(String query) {
+    return new URIBuilder() {{ this.query = query; }}.toURI();
+  }
 
   /**
    * Get the fragment component of the URI, if it is a URL.
@@ -551,15 +533,17 @@ public abstract class URI {
    * @return The fragment component of this URI, or {@code null} if none is
    * specified.
    */
-  public abstract String fragment();
+  public String fragment() { return fragment; }
 
   /**
    * Return a URI based on this one with the given fragment component.
    *
-   * @param fragment the new fragment string
+   * @param fragment the new fragment string.
    * @return A URI based on this one with the given fragment component.
    */
-  public abstract URI fragment(String fragment);
+  public URI fragment(String fragment) {
+    return new URIBuilder() {{ this.fragment = fragment; }}.toURI();
+  }
 
   /**
    * Get the hash (fragment) component of the URI, if it is a URL. This is an
@@ -576,7 +560,7 @@ public abstract class URI {
    * Return a URI based on this one with the given hash (fragment) component.
    * This is an alias for {@link #fragment(String)}.
    *
-   * @param hash the new hash string
+   * @param hash the new hash string.
    * @return A URI based on this one with the given hash component.
    */
   public final URI hash(String hash) {
@@ -597,8 +581,8 @@ public abstract class URI {
   public String resource() {
     StringBuilder sb = new StringBuilder();
     Path p = path();
-    String q = escape(query());
-    String f = escape(fragment());
+    String q = encode(query());
+    String f = encode(fragment());
 
     if (p == null && q == null && f == null) return null;
 
@@ -612,7 +596,7 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given resource component.
    *
-   * @param resource the new resource string
+   * @param resource the new resource string.
    * @return A URI based on this one with the given resource component.
    */
   public URI resource(String resource) {
@@ -645,7 +629,7 @@ public abstract class URI {
    */
   public String endpoint() {
     StringBuilder sb = new StringBuilder();
-    String s = escape(scheme());
+    String s = encode(scheme());
     String a = authority();
 
     if (s == null && a == null) return null;
@@ -659,7 +643,7 @@ public abstract class URI {
   /**
    * Return a URI based on this one with the given endpoint component.
    *
-   * @param endpoint the new endpoint string
+   * @param endpoint the new endpoint string.
    * @return A URI based on this one with the given endpoint component.
    */
   public URI endpoint(String endpoint) {
@@ -696,6 +680,27 @@ public abstract class URI {
    */
   private final URI nonEmpty() {
     return isEmpty() ? null : this;
+  }
+
+  /**
+   * Return whether or not the URI is absolute. That is, whether or not the URI
+   * contains a scheme name.
+   *
+   * @return {@code true} if this URI is absolute; {@code false} otherwise.
+   */
+  public final boolean isAbsolute() {
+    return scheme() == null;
+  }
+
+  /**
+   * Return a URI based on this one relativized to {@code base}. If there is no
+   * overlap between this URI and {@code base}, this URI is returned. TODO
+   *
+   * @param base the base URI to relativize this URI to.
+   * @return A URI based on this one, relative to {@code base},
+   */
+  public URI relativeTo(URI base) {
+    return this;
   }
 
   /**
@@ -737,65 +742,55 @@ public abstract class URI {
   }
 
   /**
-   * Return whether or not this URI object is mutable. A mutable URI can have
-   * its components modified directly, allowing multiple modification
-   * operations to be performed more efficiently. An immutable URI can serve as
-   * a key in a hash table without breaking the hash table key contract.
+   * Return an encoded representation of {@code string}.
    *
-   * @return Whether or not this URI object is mutable.
+   * @param string an input {@code String} to encode.
+   * @return An encoded representation of {@code string}.
    */
-  public abstract boolean isMutable();
-
-  /**
-   * Return an immutable copy of this URI, which should be a reference to this
-   * URI if it is already immutable. Subclasses may override this to provide
-   * their own immutable URI implementations. Otherwise, a default
-   * implementation will be used.
-   *
-   * @return An immutable copy of this URI.
-   */
-  public URI makeImmutable() {
-    if (!isMutable())
-      return this;
-    return intern(new FeatherURI(this));
-  }
-
-  /**
-   * Return an mutable copy of this URI, which should be a reference to this
-   * URI if it is already mutable. Subclasses may override this to provide
-   * their own mutable URI implementations. Otherwise, a default implementation
-   * will be used.
-   *
-   * @return An mutable copy of this URI.
-   */
-  public URI makeMutable() {
-    if (isMutable())
-      return this;
-    return new Builder(this);
-  }
-
-  /**
-   * Return an escaped version of the given string.
-   *
-   * @param string an input string to escape, which may be {@code null}
-   * @return An escaped representation of {@code string}, or {@code null} if
-   * {@code string} is {@code null}.
-   */
-  public static String escape(String string) {
+  public static String encode(String string) {
     if (string == null)
       return null;
-    return string;
+    StringBuilder sb = new StringBuilder();
+    int length = string.length();
+    for (int offset = 0; offset < length;) {
+      int cp = string.codePointAt(offset);
+      if (shouldEncode(cp))
+        sb.append(encode(cp));
+      else
+        sb.appendCodePoint(cp);
+      offset += Character.charCount(cp);
+    }
+    return sb.toString();
+  } private static boolean shouldEncode(int c) {
+    return c < ' ' || c > '~' || RESERVED.get(c);
+  }
+
+  /**
+   * Percent-encode a code point, regardless of whether or not it is a reserved
+   * character.
+   *
+   * @param c the code point to encode.
+   * @return The percent-encoding of {@code c}.
+   */
+  public static String encode(int c) {
+    StringBuilder sb = new StringBuilder();
+    do {
+      int b = c & 0xFF;
+      c >>>= 8;
+      sb.append("%").append(Integer.toString(b, 16).toUpperCase());
+    } while (c != 0);
+    return sb.toString();
   }
 
   /**
    * Return an unescaped version of the given escaped string.
    *
    * @param string an escaped input string to unescape, which may be {@code
-   * null}
+   * null}.
    * @return An unescaped representation of {@code string}, or {@code null} if
    * {@code string} is {@code null}.
    */
-  public static String unescape(String string) {
+  public static String decode(String string) {
     if (string == null)
       return null;
     return string;
@@ -805,7 +800,7 @@ public abstract class URI {
    * Test this URI for equivalence to another object. A URI is equivalent to
    * another URI if they are component-wise equal.
    *
-   * @param object the object to test equivalence with
+   * @param object the object to test equivalence with.
    * @return {@code true} if this URI is equivalent to {@code object}; {@code
    * false} otherwise.
    */
@@ -827,84 +822,9 @@ public abstract class URI {
   }
 
   public static void main(String args[]) {
-    URI u = URI.create("ftp://google.com/thing/a/b/c?stuff#more");
+    String s = "ftp://example.com/thing/a/b/c?stuff#more";
+    if (args.length > 0) s = args[0];
+    URI u = URI.create(s);
     System.out.println(u);
-    System.out.println(stork.ad.Ad.marshal(u));
-  }
-}
-
-// The default immutable URI implementation.
-final class FeatherURI extends URI {
-  private final String scheme;
-  private final String userinfo;
-  private final String host;
-  private final int    port;
-  private final Path   path;
-  private final String query;
-  private final String fragment;
-
-  FeatherURI(String uri) {
-    // For now, delegate to java.net.URI...
-    java.net.URI u = java.net.URI.create(uri);
-
-    scheme   = u.getScheme();
-    userinfo = u.getUserInfo();
-    host     = u.getHost();
-    port     = u.getPort();
-    path     = Path.create(u.getPath());
-    query    = u.getQuery();
-    fragment = u.getFragment();
-  }
-
-  FeatherURI(URI uri) {
-    scheme   = uri.scheme();
-    userinfo = uri.userInfo();
-    host     = uri.host();
-    port     = uri.port();
-    path     = uri.path();
-    query    = uri.query();
-    fragment = uri.fragment();
-  }
-
-  public String scheme() {
-    return scheme;
-  } public URI scheme(String scheme) {
-    return URI.intern(makeMutable().scheme(scheme));
-  }
-
-  public String userInfo() {
-    return userinfo;
-  } public URI userInfo(String userinfo) {
-    return URI.intern(makeMutable().userInfo(userinfo));
-  }
-
-  public String host() {
-    return host;
-  } public int port() {
-    return port;
-  } public URI hostPort(String host, int port) {
-    return URI.intern(makeMutable().hostPort(host, port));
-  }
-
-  public Path path() {
-    return path;
-  } public URI path(Path path) {
-    return URI.intern(makeMutable().path(path));
-  }
-
-  public String query() {
-    return query;
-  } public URI query(String query) {
-    return URI.intern(makeMutable().query(query));
-  }
-
-  public String fragment() {
-    return fragment;
-  } public URI fragment(String fragment) {
-    return URI.intern(makeMutable().fragment(fragment));
-  }
-
-  public boolean isMutable() {
-    return false;
   }
 }

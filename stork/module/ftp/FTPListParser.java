@@ -8,22 +8,22 @@ import java.io.*;
 import io.netty.buffer.*;
 
 import stork.feather.*;
+import stork.feather.util.*;
 import stork.module.*;
 import stork.util.*;
 
-// A class for parsing FTP listings. Based heavily on Mozilla's own FTP
-// list parsing code, available in their mozilla-central repository,
-// under the path:
-//
-//   netwerk/streamconv/converters/ParseFTPList.cpp
-//
-// This parser will return a tree root that has its name set if and only
-// if information about the listed directory was able to be retrieved from
-// the listing results.
-//
-// TODO: Check out <http://cr.yp.to/ftpparse/ftpparse.c>.
-
-public class FTPListParser extends Bell<Stat> implements Sink {
+/**
+ * A class for parsing FTP listings. Based heavily on Mozilla's own FTP list
+ * parsing code, available in their mozilla-central repository, under the path:
+ * <p/>
+ *   netwerk/streamconv/converters/ParseFTPList.cpp
+ * <p/>
+ * This parser will return a tree root that has its name set if and only if
+ * information about the listed directory was able to be retrieved from the
+ * listing results.
+ */
+public class FTPListParser extends Bell<Stat> {
+  // TODO: Check out <http://cr.yp.to/ftpparse/ftpparse.c>.
   String data = null;
   int list_type;
   StringBuilder sb = new StringBuilder();
@@ -91,20 +91,9 @@ public class FTPListParser extends Bell<Stat> implements Sink {
     } ring(root.setFiles(files));
   }
 
-  public void write(ResourceException err) {
-    ring(err.getCause());
-  }
-
-  public void drain(Slice s) {
-    if (s.isEmpty())
-      finish();
-    else
-      write(s.plain().raw());
-  }
-
   // Write a byte buffer to the file, decode as string, scan for newlines, and
-  // feed lines through parser. Assumably we're reading data where newlines are
-  // one byte so just look for newline characters.
+  // feed lines through parser. Presumably we're reading data where newlines
+  // are one byte so just look for newline characters.
   public void write(ByteBuf b) {
     byte[] bytes;
     if (b.hasArray())
@@ -179,8 +168,8 @@ public class FTPListParser extends Bell<Stat> implements Sink {
 
       case 'M':  // Check for an MLSX listing.
       if (tokens.length >= 2) try {
-        // We should tokenize on a single space.
-        String[] t = line.split(" ", 2);
+        // We must trim leading and tokenize on a single space.
+        String[] t = line.replaceAll("^\\s+", "").split(" ", 2);
         String[] facts = t[0].split(";+");
         String name = t[1];
 

@@ -20,6 +20,8 @@ class Endpoint {
   }
 
   public Resource select() {
+    if (uri == null)
+      throw new RuntimeException("No URI provided.");
     ModuleTable mt = ModuleTable.instance();
     Module m = null;
     if (module != null)

@@ -1,8 +1,7 @@
 package stork.cred;
 
 import stork.ad.*;
-
-import java.net.*;
+import stork.feather.*;
 
 // A username and password credential.
 
@@ -30,7 +29,7 @@ public class StorkUserinfo extends StorkCred<String[]> {
 
   // Return a user/pass pair from a colon-separated string.
   public static String[] split(URI uri) {
-    return split(uri.getUserInfo());
+    return split(uri.userInfo());
   } public static String[] split(String ui) {
     String u = null, p = null;
     if (ui != null && !ui.isEmpty()) {

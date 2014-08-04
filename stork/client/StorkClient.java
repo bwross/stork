@@ -1,13 +1,14 @@
 package stork.client;
 
-import stork.*;
-import stork.ad.*;
-import stork.util.*;
-
 import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.text.*;
+
+import stork.*;
+import stork.ad.*;
+import stork.feather.URI;
+import stork.util.*;
 
 // The base class for all client commands.
 
@@ -71,7 +72,7 @@ public abstract class StorkClient extends Command {
   // TODO: Support for different endpoints.
   private static Socket connect(URI u) {
     try {
-      return new Socket(u.getHost(), u.getPort());
+      return new Socket(u.host(), u.port());
     } catch (Exception e) {
       throw new RuntimeException("couldn't connect to: "+u, e);
     }

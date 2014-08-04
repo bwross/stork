@@ -1,135 +1,123 @@
 package stork.net;
 
-import stork.ad.*;
-import stork.scheduler.*;
-import stork.util.*;
-
-import io.netty.bootstrap.*;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.buffer.*;
-import io.netty.handler.codec.*;
-import io.netty.channel.*;
-import io.netty.channel.socket.*;
-
 import java.net.*;
 
-// An interface for clients to communicate with a Stork server.
+import stork.ad.*;
+import stork.scheduler.*;
+import stork.feather.*;
+import stork.feather.URI;
 
-public abstract class StorkInterface
-extends ChannelInitializer<Channel> {
-  protected String name;  // Used for debugging messages.
-  protected final URI uri;
-  protected final Scheduler sched;
-  private Channel chan;
+/**
+ * An interface which awaits incoming client requests and passes them on to the
+ * scheduler.
+ */
+public abstract class StorkInterface {
+  private final Scheduler scheduler;
 
-  // Global connection selector.
-  private static final EventLoopGroup acceptor = new NioEventLoopGroup();
-
-  public StorkInterface(Scheduler sched, URI uri) {
-    this.uri = uri;
-    this.sched = sched;
+  /**
+   * Create a {@code StorkInterface} for the given scheduler.
+   *
+   * @param scheduler the scheduler to provide an interface for.
+   */
+  public StorkInterface(Scheduler scheduler) {
+    this.scheduler = scheduler;
   }
 
-  // Automatically determine and create an interface from a URI.
-  public static StorkInterface create(Scheduler s, URI u) {
-    String p = u.getScheme();
-    if (p == null)
-      p = u.toString();
-    if (p.equals("tcp"))
-      return new TcpInterface(s, u);
-    if (p.equals("http"))
-      return new HttpInterface(s, u);
-    if (p.equals("https"))
-      return new HttpInterface(s, u);
-    throw new RuntimeException("unsupported interface scheme: "+p);
+  /**
+   * Automatically determine and create an interface from a URI.
+   *
+   * @return A {@code StorkInterface} listening for connection at endpoint
+   * specified by {@code uri}.
+   * @param scheduler the scheduler to provide an interface for.
+   * @param uri the URI specifying the interface to listen on.
+   * @throws RuntimeException if an interface could not be created based on the
+   * URI.
+   */
+  public static StorkInterface create(Scheduler scheduler, URI uri) {
+    String proto = uri.scheme();
+
+    if (proto == null)  // Hack for standalone scheme names.
+      proto = (uri = URI.create(uri+"://")).scheme();
+    if (proto == null)
+      throw new RuntimeException("Invalid interface descriptor: "+uri);
+    if (proto.equals("tcp"))
+      return new TCPInterface(scheduler, uri);
+    if (proto.equals("http") || proto.equals("https"))
+      return new HTTPInterface(scheduler, uri);
+    throw new RuntimeException(
+      "Unsupported interface scheme ("+proto+") in "+uri);
   }
 
-  // Get the port from the URI, falling back to the default if none.
-  private int getPortFromUri() {
-    int port = uri.getPort();
-    String ssp = uri.getSchemeSpecificPart();
+  /**
+   * Get the name of this interface. This is used for logging purposes.
+   *
+   * @return the name of this interface.
+   */
+  public abstract String name();
 
-    if (uri.getScheme() == null)
-      return defaultPort();
-    if (port > 0)
-      return port;
-    if (uri.getHost() == null && ssp != null)
-      port = Integer.parseInt(ssp);
-    if (port > 0)
-      return port;
-    return defaultPort();
+  /**
+   * Get a description of the address this interface is listening on. This is
+   * used for logging purposes.
+   *
+   * @return the description of this interface's address.
+   */
+  public abstract String address();
+
+  /**
+   * Used by subclasses to issue a request ad to the scheduler asynchronously.
+   * This delegates to {@code issueRequest(Ad)} asynchronously, and returns the
+   * associated {@code Request} object asynchronously through a bell.
+   *
+   * @param request (via bell) the request in the form of an ad.
+   * @return (via bell) The enqueued {@link Request} object returned by the
+   * scheduler.
+   */
+  protected Bell<Request> issueRequest(Bell<Ad> request) {
+    return request.new As<Request>() {
+      public Request convert(Ad request) {
+        return issueRequest(request);
+      }
+    };
   }
 
-  // Start listening on the interface.
-  public final void start() {
-    try {
-      start0();
-    } catch (RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  } private final void start0() throws Exception {
-    ServerBootstrap sb = new ServerBootstrap();
-    sb.channel(channel());
-    sb.group(acceptor, new NioEventLoopGroup());
-    sb.childHandler(this);
-
-    // Set some nice options everyone likes.
-    sb.option(ChannelOption.TCP_NODELAY, true);
-    sb.option(ChannelOption.SO_KEEPALIVE, true);
-
-    // Determine host and port from uri.
-    InetAddress ia = InetAddress.getByName(uri.getHost());
-    InetSocketAddress addr = new InetSocketAddress(ia, getPortFromUri());
-
-    // Bind socket to the given host/port.
-    sb.bind(addr).sync();
-    Log.info("Listening for ", name, " connections on: "+addr);
+  /**
+   * Used by subclasses to issue a request ad to the scheduler. The {@code
+   * Request} object returned by this method is a bell which will be rung with
+   * the response object. The subclass should promise the request to a handler
+   * which will appropriately marshal the response object.
+   *
+   * @param request the request in the form of an ad.
+   * @return The enqueued {@link Request} object returned by the scheduler.
+   */
+  protected Request issueRequest(Ad request) {
+    return scheduler.putRequest(request);
   }
 
-  // Handler to hand the request off to the scheduler.
-  private class AdHandler extends ChannelInboundHandlerAdapter {
-    public void channelRead(final ChannelHandlerContext ctx, Object o)
-    throws Exception {
-      sched.putRequest(new Request((Ad)o) {
-        protected void done(Object object) {
-          if (object == null)
-            ctx.writeAndFlush(
-              new Ad("message", "Operation completed successfully."));
-          else
-            ctx.writeAndFlush(Ad.marshal(object));
-        } protected void fail(Throwable t) {
-          t.printStackTrace();
-          String m = t.getMessage();
-          if (m == null) {
-            String n = t.getClass().getSimpleName();
-            m = "Unspecified error";
-            if (!n.isEmpty()) m += " ("+n+")";
-          }
-          ctx.writeAndFlush(new Ad("error", m));
-        }
-      });
-    }
+  /**
+   * Get the scheduler handler for a command.
+   */
+  protected Scheduler.Handler handler(String command) {
+    return scheduler.handler(command);
   }
 
-  // Interface wrapper around init().
-  public final void initChannel(Channel ch) throws Exception {
-    Log.fine(name, ": connection from ", ch);
-    init(ch, ch.pipeline());
-    ch.pipeline().addLast(new AdHandler());
+  /**
+   * Create an ad representing a {@code Throwable}.
+   *
+   * @param throwable a {@code Throwable} to return an ad representing.
+   * @return An ad representing {@code throwable}.
+   */
+  public static Ad errorToAd(final Throwable throwable) {
+    if (throwable == null) {
+      return errorToAd(new NullPointerException());
+    } return Ad.marshal(new Object() {
+      String type = throwable.getClass().getSimpleName();
+      String message = message(throwable);
+
+      String message(Throwable t) {
+        if (t == null) return null;
+        String m = t.getLocalizedMessage();
+        return m != null ? m : message(t.getCause());
+      }
+    });
   }
-
-  // Override this to use a transport protocol other than TCP.
-  public Class<? extends ServerChannel> channel() {
-    return NioServerSocketChannel.class;
-  }
-
-  // Initialize the newly connected channel. A handler for talking to
-  // the associated scheduler will be appended automatically.
-  public abstract void init(Channel ch, ChannelPipeline pl);
-
-  // Get the default port.
-  public abstract int defaultPort();
 }

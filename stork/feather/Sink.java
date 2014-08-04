@@ -1,51 +1,60 @@
 package stork.feather;
 
+import stork.feather.util.*;
+
 /**
- * A sink is a destination for {@link Slice}s from other {@link Resource}s. It
- * is the sink's responsibility to "drain" the slice to the associated remote
- * resource (or data consumer). That is, data should be written as soon as
- * possible to the resource connection, and be retained only if necessary. Once
- * a slice is drained to the sink, it should not be assumed the slice can be
- * requested again, and it is the sink's responsibility to guarantee that the
- * slice is eventually drained.
+ * A {@code Sink} is a destination for {@link Slice}s emitted by {@link Tap}s.
+ * It is the {@code Sink}'s responsibility to "drain" {@code Slice}s to the
+ * associated physical resource (or other data consumer). {@code Slice}s should
+ * be drained as soon as possible to, and be retained only if necessary.
  *
- * @see Resource
  * @see Tap
  * @see Slice
+ *
+ * @param <D> The destination {@code Resource} type.
  */
-public interface Sink {
+public abstract class Sink<D extends Resource> extends Pipe {
+  private D destination;
+
   /**
-   * Called when an upstream tap emits a {@link Slice}. The sink should
-   * attempt to drain the slice as soon as possible. If, after writing, the
-   * sink can no longer drain slices (e.g., when the connection to the remote
-   * resource is overwhelmed), it should call {@link Tap#cork()} on the tap the
-   * slice came from, and call {@link Tap#uncork()} when more data can be
-   * written. In case the tap is implemented incorrectly and does not obey the
-   * semantics of {@link Tap#cork()} and {@link Tap#uncork()}, the sink should
-   * retain any slices not drained and drain them when it is able to. The sink
-   * should never discard a slice.
+   * Create a {@code Sink} associated with {@code destination}.
+   *
+   * @param destination the {@code Resource} this {@code Sink} receives data
+   * for.
+   * @throws NullPointerException if {@code destination} is {@code null}.
+   */
+  public Sink(D destination) {
+    if (destination == null)
+      throw new NullPointerException("destination");
+    this.destination = destination;
+  }
+
+  public final D destination() { return destination; }
+
+  public final Sink<D> sink() { return this; }
+
+  public final Pipe.Orientation orientation() {
+    return Pipe.Orientation.SINK;
+  }
+
+  protected Bell start() throws Exception {
+    return Bell.rungBell();
+  }
+
+  /**
+   * Drain a {@code Slice} to the endpoint storage system. This method returns
+   * as soon as possible, with the actual I/O operation taking place
+   * asynchronously.
    * <p/>
-   * An empty slice indicates that the associated resource has been fully
-   * transferred and no further slices will arrive for that resource. The
-   * entire transfer is complete when an empty slice from the tap's root
-   * resource is passed to this method, after which the sink may begin
-   * finalizing the transfer.
+   * If the {@code Slice} cannot be drained immeditately due to congestion,
+   * {@code pause()} should be called, and {@code resume()} should be called
+   * when the channel is free to transmit data again.
    *
-   * @param data a slice of data coming from an attached tap
+   * @param slice a {@code Slice} being drained through the pipeline.
+   * @throws IllegalStateException if this method is called when the pipeline
+   * has not been initialized.
    */
-  void drain(Slice data);
+  protected abstract Bell drain(Slice slice) throws Exception;
 
-  /**
-   * Check if this sink supports random data access.
-   */
-
-  /**
-   * Called when an upstream tap encounters an error while downloading a {@link
-   * Resource}. Depending on the nature of the error, the sink should decide to
-   * either abort the transfer, omit the file, or take some other action.
-   *
-   * @param error the error that occurred during transfer, along with
-   * contextual information
-   */
-  //void handle(ResourceException error);
+  protected abstract void finish();
 }

@@ -110,6 +110,11 @@ class AdMember extends AdType {
     return super.toString()+" "+name();
   }
 
+  // Check if this member should be ignored for marshalling.
+  public boolean ignore() {
+    return ignore(member);
+  }
+
   // Static methods to determine whether members should be ignored for
   // purposes of marshalling.
   static boolean ignore(Member m) {

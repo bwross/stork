@@ -1,13 +1,13 @@
 package stork;
 
-import stork.client.*;
-import stork.scheduler.*;
-import stork.util.*;
-import stork.ad.*;
-
 import java.util.*;
 import java.io.*;
-import java.net.*;
+
+import stork.ad.*;
+import stork.client.*;
+import stork.feather.*;
+import stork.scheduler.*;
+import stork.util.*;
 
 // The stork command without any arguments.
 //
@@ -18,6 +18,17 @@ import java.net.*;
 public class Stork extends Command {
   public static final Settings settings = new Settings();
   private static String version = null;
+
+  static {
+    // Register a handler to marshal strings in ads into Feather URIs.
+    new Ad.Marshaller<URI>(URI.class) {
+      public String marshal(URI uri) {
+        return uri.toString();
+      } public URI unmarshal(String uri) {
+        return URI.create(uri);
+      }
+    };
+  }
 
   // A class for storing Stork configuration settings.
   public static class Settings {
@@ -31,7 +42,8 @@ public class Stork extends Command {
     public int state_save_interval = 120;
 
     public URI connect = URI.create("tcp://localhost:57024");
-    public URI[] listen = null;
+    public URI[] listen;
+    public URI web_service_url;
 
     public boolean registration = false;
 

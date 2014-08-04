@@ -27,15 +27,15 @@ public class Job {
   private int job_id = 0;
   private JobStatus status;
   private Endpoint src, dest;
-  private TransferProgress progress = new TransferProgress();
+  //private TransferProgress progress = new TransferProgress();
 
   private int attempts = 0, max_attempts = 10;
   private String message;
 
   private Ad options;
 
-  private Watch queue_timer;
-  private Watch run_timer;
+  //private Watch queue_timer;
+  //private Watch run_timer;
 
   private transient User user;
   private transient Thread thread;
@@ -79,17 +79,17 @@ public class Job {
     // Update state.
     switch (status = s) {
       case scheduled:
-        queue_timer = new Watch(true); break;
+        //queue_timer = new Watch(true); break;
       case processing:
-        run_timer = new Watch(true); break;
+        //run_timer = new Watch(true); break;
       case removed:
         if (thread != null)
           thread.interrupt();
       case failed:
       case complete:
-        queue_timer.stop();
-        run_timer.stop();
-        progress.transferEnded(true);
+        //queue_timer.stop();
+        //run_timer.stop();
+        //progress.transferEnded(true);
     } return this;
   }
 

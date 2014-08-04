@@ -12,6 +12,10 @@ public class FTPHostPort {
   public byte[] bytes;  // Only the first four bytes of this are used.
   public int port;
 
+  public FTPHostPort(FTPChannel.Reply reply) {
+    this(reply.message().split("[()]")[1]);
+  }
+
   public FTPHostPort(String csv) {
     try {
       bytes = new byte[6];

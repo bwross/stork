@@ -40,20 +40,20 @@ public class ModuleTable {
 
   // Add a transfer module to the table.
   public void register(File f) {
-    register(new ExternalModule(f));
+    //register(new ExternalModule(f));
   } public void register(Module m) {
     // Check if handle is in use.
-    if (!by_handle.containsKey(m.handle)) {
-      by_handle.put(m.handle, m);
-      Log.info("Registered module \"", m, "\" [handle: ", m.handle, "]");
+    if (!by_handle.containsKey(m.handle())) {
+      by_handle.put(m.handle(), m);
+      Log.info("Registered module \"", m, "\" [handle: ", m.handle(), "]");
     } else {
-      Log.warning("Module handle \"", m.handle, "\"in use, ignoring");
+      Log.warning("Module handle \"", m.handle(), "\"in use, ignoring");
       return;
     }
 
     // Add the protocols for this module.
     Set<String> good = new TreeSet<String>(), bad = new TreeSet<String>();
-    for (String p : m.protocols) {
+    for (String p : m.protocols()) {
       if (by_proto.get(p) == null) {
         good.add(p);
         by_proto.put(p, m);
@@ -72,7 +72,7 @@ public class ModuleTable {
   public Ad infoAds() {
     Ad mods = new Ad();
     for (Module m : by_handle.values())
-      mods.put(m.handle, Ad.marshal(m));
+      mods.put(m.handle(), Ad.marshal(m));
     return mods;
   }
 

@@ -1,206 +1,285 @@
 package stork.feather;
 
+import java.util.*;
+
+import stork.feather.util.*;
+
 /**
- * A handle on a remote resource, such as a file or directory. A resource
- * should essentially be a wrapper around a URI, and its creation should have
- * no side-effects. All of the methods specified by this interface should
- * return immediately. In the case of methods that return {@link Bell}s, the
- * result should be determined asynchronously and given to the caller through
- * the returned bell. Implementations that do not support certain operations
- * are allowed to throw an {@link UnsupportedOperationException}.
+ * A virtual representation of a physical resource. The resource(s) represented
+ * by a {@code Resource} object may be a single resource (such as a file or
+ * directory) or a set thereof (such as a directory tree or files matching a
+ * pattern). The existence of a {@code Resource} object does not guarantee the
+ * existence or accessibility of the resource(s) it represents. In particular,
+ * creating a {@code Resource} object does not 
+ * <p/>
+ * A {@code Resource} should be thought of as a placeholder for or reference to
+ * a physical resource, with a {@code Session} as the entity responsible for
+ * providing access it to the concrete resource(s) it represents. A {@code
+ * Resource} object should not have any allocation state associated with it.
+ * Instead, such state should be maintained by the {@code Session} the {@code
+ * Resource} is selected through.
+ * <p/>
+ * In general, a {@code Resource} represents a selection path from a top-level
+ * {@code Resource} (typically a {@code Session}) to one or many {@code
+ * Resource}s representing subresources.  This top-level {@code Resource} is
+ * known as the <i>root</i>. If a {@code Resource} represents exactly one
+ * physical resource, it is called a <i>singleton</i> {@code Resource}. The
+ * <i>trunk</i> of a {@code Resource} is the first singleton {@code Resource}
+ * encountered when traversing backwards to the root.
+ * <p/>
+ * All of the methods specified by this interface should return immediately. In
+ * the case of methods that return {@link Bell}s, the result should be
+ * determined asynchronously and given to the caller through the returned
+ * {@code Bell}. Implementations that do not support certain operations are
+ * allowed to throw an {@link UnsupportedOperationException}.
  *
  * @see Session
- * @see Stat
- * @see URI
+ *
+ * @param <S> The type of {@code Session} that can operate on this {@code
+ * Resource}.
+ * @param <R> The type of {@code Resource}s this {@code Resource} can be
+ * selected from or produce through selection. Generally, for a subclass, this
+ * is the subclass itself.
  */
-public class Resource {
-  protected final Session session;
-  protected final URI uri;
+public class Resource<S extends Session<S,R>, R extends Resource<S,R>> {
 
-  /**
-   * The {@code Session} class calls this constructor.
-   *
-   * @param uri the URI referring to this resource.
-   * @throws NullPointerException if {@code uri} is {@code null}.
-   * @throws ClassCastException if the calling subclass is not a {@code
-   * Session}.
-   */
-  protected Resource(URI uri) {
-    if (uri == null)
-      throw new NullPointerException();
-    this.uri = uri.makeImmutable();
-    this.session = ((Session) this).decorate();
+  /** The selection {@code Path} of this {@code Resource}. */
+  public final Path path;
+  /** The {@code Session} associated with this {@code Resource}. */
+  public final S session;
+
+  protected Resource(S session, Path path) {
+    if (path == null)
+      path = Path.ROOT;
+    this.path = path;
+    this.session = session;
+  }
+
+  protected Resource(S session) {
+    this(session, null);
+  }
+
+  /** Get the unencoded name of this {@code Resource}. */
+  public String name() {
+    return path.name(false);
   }
 
   /**
-   * Create a resource wrapping the given URI and session.
+   * Return whether or not this is a root {@code Resource}.
    *
-   * @param session the session through which this resource can be accessed.
-   * @param uri the URI referring to this resource.
-   * @throws NullPointerException if either {@code session} or {@code uri} are
-   * {@code null}.
+   * @return {@code true} if this is a root {@code Resource}; {@code false}
+   * otherwise.
    */
-  public Resource(Session session, URI uri) {
-    if (session == null || uri == null)
-      throw new NullPointerException();
-    this.uri = uri.makeImmutable();
-    this.session = session.decorate();
+  public final boolean isRoot() { return path.isRoot(); }
+
+  /**
+   * Return the trunk of this {@code Resource}. That is, the nearest singleton
+   * parent {@code Resource}.
+   *
+   * @return The first singleton ancestor of this {@code Resource}.
+   */
+  public final R trunk() {
+    return (isSingleton()) ? (R) this : session.select(path.trunk());
   }
 
   /**
-   * Reselect this resource through an equivalent session. Assuming the
-   * sessions are actually equivalent, the returned resource will point to the
-   * same physical resource. This can, for instance, be used to select the same
-   * resource through an already existing session.
+   * Check if this is a singleton {@code Resource}. That is, a {@code Resource}
+   * that identifies exactly one physical resource.
+   *
+   * @return {@code true} if this is a singleton {@code Resource}; {@code
+   * false} otherwise.
+   */
+  public final boolean isSingleton() {
+    return !path.isGlob();
+  }
+
+  /**
+   * Reselect this {@code Resource} through an equivalent {@code Session}.
+   * Assuming {@code session} is actually equivalent to this {@code Resource}'s
+   * {@code Session}, the returned {@code Resource} will refer to the same
+   * physical resource. This can, for instance, be used to select the same
+   * {@code Resource} through an already established {@code Session}.
    *
    * @param session the session to reselect this resource on.
-   * @return An equivalent resource which can be accessed through an equivalent
-   * session.
-   * @throws IllegalArgumentException if {@code session} is not equivalent to
-   * this resource's session.
+   * @return An equivalent {@code Resource} which can be accessed through
+   * {@code session}.
    * @throws NullPointerException if {@code session} is {@code null}.
+   * @throws IllegalArgumentException if {@code session} is not equivalent to
+   * this {@code Resource}'s {@code Session}.
    */
-  public Resource reselect(Session session) {
+  public R reselectOn(S session) {
+    if (session == null)
+      throw new IllegalArgumentException();
+    if (session == this.session)
+      return (R) this;
     if (!session.equals(this.session))
       throw new IllegalArgumentException();
-    return session.select(uri);
+    return session.select(path);
   }
 
   /**
-   * Get the {@link Session) associated with this resource.
-   *
-   * @return The {@link Session} associated with this resource.
-   * @see Session
-   */
-  public Session session() {
-    return session;
-  }
-
-  /**
-   * Get the {@link URI} associated with this resource.
+   * Get a {@link URI} associated with this resource.
    * 
    * @return A {@link URI} which identifies this resource.
    */
   public URI uri() {
-    return uri;
+    return session.uri.append(path);
   }
 
   /**
-   * Get metadata for this resource, which includes a list of subresources.
+   * Select a subresource relative to this resource.
+   *
+   * @param name the literal name of a subresource to select.
+   * @return A subresource of this resource.
+   */
+  public final R select(String name) {
+    return select(Path.ROOT.appendLiteral(name));
+  }
+
+  /**
+   * Select a subresource relative to this {@code Resource} using {@code path}.
+   *
+   * @param path the path to the subresource, relative to this {@code
+   * Resource}.
+   * @return A subresource relative to this {@code Resource}.
+   */
+  public R select(Path path) {
+    return session.select(this.path.append(path));
+  }
+
+  /**
+   * Initialize the {@code Session} associated with this {@code Resource} to
+   * perform operations on this {@code Resource}. Implementors should call this
+   * themselves in the method body of any operation that requires {@code
+   * Session} initialization (for example, a control channel connection) to
+   * ensure that the associated {@code Session} is ready to operate.  This can
+   * also be used outside the framework to "warm up" the {@code Resource} in
+   * anticipation of future use. The returned {@code Bell} will ring when
+   * initialization is complete, indicating that {@code Resource}
+   * implementations are allowed to perform the operation through the {@code
+   * Session}.
+   *
+   * @return (via bell) This {@code Resource} once it has been initialized to
+   * operate on this {@code Resource}.
+   */
+  public final Bell<R> initialize() {
+    return session.mediatedInitialize().as((R)this);
+  }
+
+  /**
+   * Get metadata for this {@code Resource}.
    *
    * @return (via bell) A {@link Stat} containing resource metadata.
-   * @throws ResourceException (via bell) if there was an error retrieving
-   * metadata for the resource
+   * @throws Exception (via bell) if there was an error retrieving metadata for
+   * the {@code Resource}.
    * @throws UnsupportedOperationException if metadata retrieval is not
-   * supported
+   * supported.
    */
   public Bell<Stat> stat() {
-    return session.stat(uri);
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Get a listing of names of sub-{@code Resource}s under this {@code
+   * Resource}.
+   *
+   * @return An {@code Emitter} that emits {@code Resource} names.
+   * @throws UnsupportedOperationException if listing is not supported.
+   */
+  public Emitter<String> list() {
+    throw new UnsupportedOperationException();
   }
 
   /**
    * Create this resource as a directory on the storage system. If the resource
    * cannot be created, or already exists and is not a directory, the returned
-   * {@link Bell} will be resolved with a {@link ResourceException}.
+   * {@link Bell} will be resolved with an {@link Exception}.
    *
-   * @return (via bell) {@code null} if successful.
-   * @throws ResourceException (via bell) if the directory could not be created
-   * or already exists and is not a directory
+   * @return (via bell) this {@code Resource} if successful.
+   * @throws Exception (via bell) if the directory could not be created or
+   * already exists and is not a directory.
    * @throws UnsupportedOperationException if creating directories is not
-   * supported
-   * @see Bell
+   * supported.
    */
-  public Bell<Void> mkdir() {
-    return session.mkdir(uri);
+  public Bell<R> mkdir() {
+    throw new UnsupportedOperationException();
   }
 
   /**
-   * Delete the resource and all subresources from the storage system. If the
-   * resource cannot be removed, the returned {@link Bell} will be resolved
-   * with a ResourceException.
+   * Delete the {@code Resource} from the storage system. If the resource
+   * cannot be removed, the returned {@link Bell} will be resolved with an
+   * {@code Exception}.
    *
    * @return (via bell) {@code null} if successful.
-   * @throws ResourceException (via bell) if the resource could not be fully
-   * removed
-   * @throws UnsupportedOperationException if removal is not supported
-   * @see Bell
+   * @throws Exception (via bell) if the resource could not be fully removed.
+   * @throws UnsupportedOperationException if removal is not supported.
    */
-  public Bell<Void> rm() {
-    return session.rm(uri);
+  public Bell<R> delete() {
+    throw new UnsupportedOperationException();
   }
 
   /**
-   * Select a subresource relative to this resource.
+   * Return a {@code Sink} that will drain data for this {@code Resource}. Any
+   * connection operation, if necessary, should begin asynchronously as soon as
+   * this method is called.
    *
-   * @return A subresource relative to this resource.
-   * @param path the path to the subresource, relative to this resource.
-   * @see Bell
+   * @return A {@code Sink} which drains {@code Slice}s to this {@code
+   * Resource}.
+   * @throws Exception (via bell) if opening the {@code Sink} fails.
+   * @throws UnsupportedOperationException if this {@code Resource} does not
+   * support writing.
    */
-  public final Resource select(String path) {
-    if (path == null)
-      return select((Path)null);
-    return select(Path.create(path));
+  public Sink<R> sink() {
+    throw new UnsupportedOperationException();
   }
 
   /**
-   * Select a subresource relative to this resource.
+   * Return a {@code Tap} that will emit data from this {@code Resource}. Any
+   * connection operation, if necessary, should begin asynchronously as soon as
+   * this method is called.
    *
-   * @return A subresource relative to this resource.
-   * @param path the path to the subresource, relative to this resource.
-   * @see Bell
+   * @return (via bell) A {@code Tap} which emits {@code Slice}s from this
+   * {@code Resource}.
+   * @throws Exception (via bell) if opening the {@code Tap} fails.
+   * @throws UnsupportedOperationException if this {@code Resource} does not
+   * support reading.
    */
-  public Resource select(Path path) {
-    return session.select(uri.append(path));
+  public Tap<R> tap() {
+    throw new UnsupportedOperationException();
   }
 
   /**
-   * Called by client code to initiate a transfer to the named {@link Resource}
-   * using whatever method is deemed most appropriate by the implementation.
-   * The implementation should try to transfer the resource as efficiently as
-   * possible, and so should inspect the destination resource to determine if
-   * more efficient alternatives to proxy transferring can be done. This method
-   * should perform a proxy transfer as a catch-all last resort.
+   * Initiate a transfer from this {@code Resource} to {@code resource} using
+   * whatever method is deemed most appropriate by the implementation.  The
+   * implementation should try to transfer this {@code Resource} as efficiently
+   * as possible, and so should inspect the destination {@code Resource} to
+   * determine if more efficient alternatives to proxy transferring can be
+   * done. This method should perform a proxy transfer as a catch-all last
+   * resort.
    *
    * @param resource the destination resource to transfer this resource to
-   * @return (via bell) A {@link Transfer} on success; the returned {@code
-   * Transfer} object can be used to control and monitor the transfer.
-   * @throws ResourceException (via bell) if the transfer fails
+   * @return A {@link Transfer} on success. The returned {@code Transfer}
+   * object can be used to control and monitor the transfer.
    * @throws UnsupportedOperationException if the direction of transfer is not
-   * supported by one of the resources
-   * @see Bell
+   * supported by one of the resources.
+   * @throws NullPointerException if {@code resource} is {@code null}.
    */
-  public Bell<Transfer> transferTo(Resource resource) {
-    return Transfer.proxy(tap(), resource.sink());
+  public <D extends Resource<?,D>> Transfer<R,D> transferTo(D resource) {
+    return new ProxyTransfer<R,D>((R)this, resource);
   }
 
-  /**
-   * Open a sink to the resource. Any connection operation, if necessary,
-   * should begin as soon as this method is called. The returned bell should
-   * be rung once the sink is ready to accept data.
-   *
-   * @return (via bell) A sink which drains to the named resource.
-   * @throws ResourceException (via bell) if opening the sink fails
-   * @throws UnsupportedOperationException if the resource does not support
-   * writing
-   * @see Bell
-   */
-  public Bell<Sink> sink() {
-    return session.sink(uri);
+  public String toString() {
+    return session.uri.append(path).toString();
   }
 
-  /**
-   * Open a tap on the resource. Any connection operation, if necessary, should
-   * begin, as soon as this method is called. The returned bell should be rung
-   * once the tap is ready to emit data.
-   *
-   * @return (via bell) A tap which emits slices from this resource and its
-   * subresources.
-   * @throws ResourceException (via bell) if opening the tap fails
-   * @throws UnsupportedOperationException if the resource does not support
-   * reading
-   * @see Bell
-   */
-  public Bell<Tap> tap() {
-    return session.tap(uri);
+  public boolean equals(Object o) {
+    if (o == this) return true;
+    if (!(o instanceof Resource)) return false;
+    Resource r = (Resource) o;
+    return path.equals(r.path) && session.equals(r.session);
+  }
+
+  public int hashCode() {
+    return 13*path.hashCode() + 17*session.hashCode();
   }
 }

@@ -2,10 +2,10 @@ package stork.scheduler;
 
 import stork.Stork;
 import stork.ad.*;
+import stork.feather.*;
 import stork.cred.*;
 import stork.util.*;
 
-import java.net.*;
 import java.security.*;
 import java.util.*;
 
@@ -21,8 +21,8 @@ public class User {
   public String name;
 
   public ArrayList<Job> jobs = new ArrayList<Job>();
-  public LinkedList<URI>  history = new LinkedList<URI>();
-  public HashSet<String>    creds = new HashSet<String>();
+  public LinkedList<URI> history = new LinkedList<URI>();
+  public HashSet<String> creds = new HashSet<String>();
 
   // The minimum password length.
   public static final int PASS_LEN = 6;

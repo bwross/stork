@@ -3,7 +3,8 @@ package stork.util;
 import java.util.*;
 import java.util.regex.*;
 import java.io.*;
-import java.net.URI;
+
+import stork.ad.Ad;
 
 // A bunch of static utility functions, how fun!
 //
@@ -150,35 +151,6 @@ public abstract class StorkUtil {
   // ---------------------
   // Functions to get information about the local file system.
   
-  // Get an XferList a local path. If it's a directory, does a
-  // recursive listing.
-  public static XferList list(String path) throws Exception {
-    File file = new File(path);
-
-    if (!file.isDirectory())
-      return new XferList(path, path, file.length());
-    
-    XferList list = new XferList(path, path);
-    LinkedList<String> wl = new LinkedList<String>();
-    wl.add("");
-
-    // The working list will contain path names of directories relative
-    // to the root path passed to this function.
-    while (!wl.isEmpty()) {
-      String s = wl.pop();
-      for (File f : new File(path, s).listFiles()) {
-        if (f.isDirectory()) {
-          wl.add(s+f.getName());
-          list.add(s+f.getName());
-        } else {
-          list.add(s+f.getName(), f.length());
-        }
-      }
-    }
-
-    return list;
-  }
-
   // Get the size of a file.
   public static long size(String path) throws Exception {
     return new File(path).length();
@@ -186,35 +158,6 @@ public abstract class StorkUtil {
 
   // Miscellaneous functions
   // -----------------------
-  // Make a URI from string, throws if there's a parse error.
-  public static URI makeURI(String uri) {
-    if (uri == null) {
-      uri = "";
-    } try {
-      URI u = new URI(uri).normalize();
-
-      if (u.getScheme() == null || u.getScheme().isEmpty())
-        throw new RuntimeException("no protocol specified");
-
-      return u;
-    } catch (Exception e) {
-      throw new RuntimeException("Couldn't parse URI: "+e.getMessage(), e);
-    }
-  }
-
-  // Return a new URI based on the given URI with the non-server components
-  // removed.
-  public static URI rootURI(String uri) {
-    return rootURI(makeURI(uri));
-  } public static URI rootURI(URI uri) {
-    try {
-      return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(),
-                     uri.getPort(), null, null, null);
-    } catch (Exception e) {
-      throw new RuntimeException("Couldn't encode URI: "+e.getMessage(), e);
-    }
-  }
-
   // Convert a size into a human-readable string.
   public static String prettySize(long s) {
     return prettySize((double)s, (char)0);
@@ -230,18 +173,6 @@ public abstract class StorkUtil {
     } if (pre == 0) {
       return String.format("%d", (int) s);
     } return String.format("%.02f%c", s, pre);
-  }
-
-  // Normalize a path. Squash /'s, resolve .'s and ..'s, and fix
-  // home directory shorthand.
-  public static String normalizePath(String path) {
-    try {
-      path = new URI(null, null, path, null).normalize().getPath();
-    } catch (Exception e) {
-      throw new RuntimeException("invalid path");
-    } if (path.startsWith("/~")) {
-      path = path.substring(1);
-    } return path;
   }
 
   // Convert a byte array into a formatted string.
